@@ -66,6 +66,7 @@
       "allowToChangeInstallationDirectory": true,
       "shortcutName": "Рабочий таймкод"
     },
-    "compression": "maximum"
+    "compression": "maximum",
+    "afterPack": "build/afterPack.js"
   }
 }
