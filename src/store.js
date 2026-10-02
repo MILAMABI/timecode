@@ -17,6 +17,7 @@ const DEFAULTS = {
   focus: { phase: "idle" },
   pause: null,
   breaks: [],
+  projectAliases: {},
 };
 
 class Store {

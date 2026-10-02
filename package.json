@@ -1,7 +1,7 @@
 {
   "name": "timecode-tracker",
   "productName": "Timecode",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "Рабочий таймкод — трекер времени для креативщиков: видео, фото, дизайн, моушн, звук. Сам пишет время в рабочих программах и раскладывает по этапам и проектам.",
   "main": "src/main.js",
   "author": "MILAMABI",
@@ -9,7 +9,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/engine.test.js && node test/store.test.js && node test/focus.test.js && node test/professions.test.js",
+    "test": "node test/engine.test.js && node test/store.test.js && node test/focus.test.js && node test/professions.test.js && node test/projects.test.js",
     "dist:win": "electron-builder --win nsis --x64 --publish never",
     "dist:mac-arm": "electron-builder --mac dmg --arm64 --publish never",
     "dist:mac-intel": "electron-builder --mac dmg --x64 --publish never",

@@ -94,8 +94,11 @@ new ResizeObserver(() => {
 let view = { collapsed: false, anchor: "right" }, morphing = false;
 const ORB_PX = 40;
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-const EASE_IN = "cubic-bezier(.55,0,.2,1.12)";   // сжатие с лёгкой пружинкой в конце
-const EASE_OUT = "cubic-bezier(.2,.9,.25,1.06)"; // раскрытие с небольшим «перелётом»
+// Плавный ease-in-out без перелёта: медленный старт, ускорение в середине, мягкая остановка.
+const EASE = "cubic-bezier(.65,0,.35,1)";
+const T_COLLAPSE = 560, T_EXPAND = 600;
+const SHADOW_BIG = "inset 0 1px 0 rgba(255,255,255,.18), 0 3px 5px rgba(0,0,0,.3)";
+const SHADOW_ORB = "inset 0 1px 0 rgba(255,255,255,.2), 0 1px 3px rgba(0,0,0,.3)";
 
 function applyAnchor() { document.body.classList.toggle("right", view.anchor === "right"); }
 
@@ -107,20 +110,23 @@ async function collapse() {
   view = { ...view, anchor: (await api.miniView()).anchor }; // к какому краю прижиматься
   applyAnchor();
   w.style.width = from.width + "px"; w.style.height = from.height + "px";
-  w.classList.add("fading");
-  await new Promise((r) => setTimeout(r, reduced() ? 0 : 120));
-  w.classList.add("morphing");
+  // содержимое растворяется одновременно с началом сжатия — без паузы между шагами
+  w.classList.add("fading", "morphing");
   if (!reduced()) {
+    const core = w.querySelector(".core");
+    core.animate([{ opacity: 0, transform: "scale(.4)" }, { opacity: 0, transform: "scale(.4)", offset: .45 }, { opacity: 1, transform: "scale(1)" }],
+      { duration: T_COLLAPSE, easing: EASE });
     await w.animate(
-      [{ width: from.width + "px", height: from.height + "px", borderRadius: "24px" },
-       { width: ORB_PX + "px", height: ORB_PX + "px", borderRadius: ORB_PX / 2 + "px" }],
-      { duration: 460, easing: EASE_IN, fill: "forwards" }
+      [{ width: from.width + "px", height: from.height + "px", borderRadius: "24px", boxShadow: SHADOW_BIG },
+       { width: ORB_PX + "px", height: ORB_PX + "px", borderRadius: ORB_PX / 2 + "px", boxShadow: SHADOW_ORB }],
+      { duration: T_COLLAPSE, easing: EASE, fill: "forwards" }
     ).finished;
   }
+  w.querySelectorAll(".core").forEach((c) => c.getAnimations().forEach((a) => a.cancel()));
   w.getAnimations().forEach((a) => a.cancel());
   w.style.width = ""; w.style.height = "";
-  w.classList.remove("morphing", "fading");
   w.classList.add("collapsed");
+  w.classList.remove("morphing", "fading");
   view = await api.miniCollapse(true);
   applyAnchor();
   morphing = false;
@@ -140,16 +146,22 @@ async function expand() {
   w.classList.add("morphing", "fading");
   w.style.width = ORB_PX + "px"; w.style.height = ORB_PX + "px";
   if (!reduced()) {
-    await w.animate(
-      [{ width: ORB_PX + "px", height: ORB_PX + "px", borderRadius: ORB_PX / 2 + "px" },
-       { width: to.width + "px", height: to.height + "px", borderRadius: "24px" }],
-      { duration: 520, easing: EASE_OUT, fill: "forwards" }
-    ).finished;
+    const core = w.querySelector(".core");
+    core.animate([{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(.4)", offset: .4 }, { opacity: 0, transform: "scale(.4)" }],
+      { duration: T_EXPAND, easing: EASE, fill: "forwards" });
+    const grow = w.animate(
+      [{ width: ORB_PX + "px", height: ORB_PX + "px", borderRadius: ORB_PX / 2 + "px", boxShadow: SHADOW_ORB },
+       { width: to.width + "px", height: to.height + "px", borderRadius: "24px", boxShadow: SHADOW_BIG }],
+      { duration: T_EXPAND, easing: EASE, fill: "forwards" }
+    );
+    // содержимое начинает проявляться на последней трети раскрытия
+    setTimeout(() => w.classList.remove("fading"), T_EXPAND * 0.62);
+    await grow.finished;
   }
+  w.querySelectorAll(".core").forEach((c) => c.getAnimations().forEach((a) => a.cancel()));
   w.getAnimations().forEach((a) => a.cancel());
   w.style.width = ""; w.style.height = "";
-  w.classList.remove("morphing");
-  requestAnimationFrame(() => w.classList.remove("fading"));
+  w.classList.remove("morphing", "fading");
   morphing = false;
   lastH = 0; // пусть окно подстроит высоту под содержимое
 }

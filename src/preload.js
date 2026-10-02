@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld("api", {
   setStages: (stages) => ipcRenderer.invoke("stages:set", stages),
   setSettings: (patch) => ipcRenderer.invoke("settings:set", patch),
   setProfessions: (list) => ipcRenderer.invoke("professions:set", list),
+  renameProject: (fromKey, toName) => ipcRenderer.invoke("projects:rename", fromKey, toName),
+  removeAlias: (key) => ipcRenderer.invoke("projects:unalias", key),
   setProject: (name) => ipcRenderer.invoke("project:set", name),
   toggleTimer: (cat, project) => ipcRenderer.invoke("timer:toggle", cat, project),
   stopTimer: () => ipcRenderer.invoke("timer:stop"),

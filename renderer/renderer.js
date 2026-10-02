@@ -309,6 +309,8 @@ function groupProjects(list){
   }).sort((a,b)=>(a.key==="__none")-(b.key==="__none")||b.total-a.total);
 }
 function renderProjects(){
+  // пока вводишь новое название — не перерисовываем, чтобы не сбить ввод
+  if(editKey&&document.activeElement&&document.activeElement.closest&&document.activeElement.closest(".pedit"))return;
   const list=sessions.filter(s=>s.start>=periodStart(period));
   const ps=groupProjects(list);
   if(!ps.length){$("plist").innerHTML=`<div class="empty">${sessions.length?"За этот период проектов нет.":"Впиши название проекта перед запуском таймера — и здесь появится разбивка по каждому проекту."}</div>`;return}
@@ -316,13 +318,36 @@ function renderProjects(){
   $("plist").innerHTML=ps.map(p=>{
     const shown=shownStages(p.by).filter(c=>p.by[c.id]>0);
     const share=grand?Math.round(p.total/grand*100):0;
-    return `<button type="button" class="card pcard" data-proj="${esc(p.key)}" aria-pressed="${projFilter===p.key}">
-      <div class="phead"><span class="pname ${p.key==="__none"?"none":""}">${esc(p.name)}</span><span class="ptotal num">${fmtHM(p.total)}</span></div>
+    const editing=editKey===p.key;
+    return `<div class="card pcard" data-proj="${esc(p.key)}" role="button" tabindex="0" aria-pressed="${projFilter===p.key}">
+      <div class="phead"><span class="pname ${p.key==="__none"?"none":""}">${esc(p.name)}</span>
+        <span class="pright">${p.key!=="__none"&&!editing?`<button type="button" class="pedit-btn" data-edit="${esc(p.key)}" title="Переименовать или объединить" aria-label="Переименовать проект ${esc(p.name)}"><svg viewBox="0 0 16 16"><path d="M10.5 2.5l3 3L6 13H3v-3z"/></svg></button>`:""}<span class="ptotal num">${fmtHM(p.total)}</span></span></div>
+      ${editing?`<form class="pedit" data-from="${esc(p.key)}">
+        <input class="field" id="peditInput" value="${esc(p.name)}" list="projList" maxlength="80" autocomplete="off" aria-label="Новое название проекта">
+        <button type="submit" class="pill primary" id="peditGo">Сохранить</button><button type="button" class="pill" data-cancel="1">Отмена</button>
+        <p class="pmeta" id="peditHint">Впиши новое название или выбери существующий проект, чтобы объединить.</p></form>`:""}
       <div class="track" aria-hidden="true">${shown.map(c=>`<span style="background:${cvar(c)};width:${p.by[c.id]/p.total*100}%"></span>`).join("")}</div>
       <div class="pstages">${shown.map(c=>`<span style="--c:${cvar(c)}"><i></i>${esc(c.name)} <b class="num">${fmtHM(p.by[c.id])}</b> <em class="num">${Math.round(p.by[c.id]/p.total*100)}%</em></span>`).join("")}</div>
       <div class="pmeta num">${p.live?"идёт сейчас · ":""}${p.sessions.length} ${plural(p.sessions.length,"сессия","сессии","сессий")} · ${p.days} ${plural(p.days,"день","дня","дней")} · ${share}% времени за период · последняя работа: ${esc(dayLabel(startOfDay(p.last)).toLowerCase())}</div>
-    </button>`;
-  }).join("");
+    </div>`;
+  }).join("")+renderAliases();
+  if(editKey){const i=$("peditInput");if(i&&document.activeElement!==i){i.focus();i.select()}updateEditHint()}
+}
+function renderAliases(){
+  const al=Object.entries(projectAliases||{});
+  if(!al.length)return "";
+  return `<div class="aliases"><h3>Связанные названия</h3><p class="pmeta">Файлы с такими названиями автоматически попадают в нужный проект.</p>
+    ${al.map(([from,to])=>`<span class="alias"><span>${esc(from)}</span><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M1 5h13M10 1l4 4-4 4"/></svg><b>${esc(to)}</b><button type="button" data-unalias="${esc(from)}" aria-label="Отвязать ${esc(from)}" title="Отвязать">×</button></span>`).join("")}</div>`;
+}
+function projectNameByKey(k){const s=sessions.find(x=>projKey(x)===k);return s?s.project.trim():""}
+function updateEditHint(){
+  const i=$("peditInput");if(!i)return;
+  const v=i.value.trim(),k=v.toLowerCase(),other=v&&k!==editKey&&sessions.some(s=>projKey(s)===k);
+  $("peditGo").textContent=other?"Объединить":"Сохранить";
+  $("peditGo").disabled=!v;
+  $("peditHint").textContent=!v?"Название не может быть пустым.":other
+    ?`Все сессии переедут в «${projectNameByKey(k)}». Файлы с названием «${projectNameByKey(editKey)}» дальше тоже будут попадать туда.`
+    :k===editKey?"Можно поменять регистр или написать название аккуратнее.":"Новые сессии из файла со старым названием тоже будут записываться под новым.";
 }
 function renderAllTime(){
   if(!sessions.length){$("alltime").textContent="Здесь появится общее время в трекере";return}
@@ -419,7 +444,25 @@ $("period").addEventListener("click",e=>{
   document.querySelectorAll("#period button").forEach(x=>x.setAttribute("aria-pressed",x===b));render();
 });
 $("tabs").addEventListener("click",e=>{const b=e.target.closest("[data-t]");if(!b)return;tab=b.dataset.t;lsSet(LST,tab);renderTabs();$("content").scrollTop=0});
+let editKey=null,projectAliases={};
+$("plist").addEventListener("input",e=>{if(e.target.id==="peditInput")updateEditHint()});
+$("plist").addEventListener("submit",async e=>{
+  e.preventDefault();const f=e.target.closest(".pedit");if(!f)return;
+  const to=$("peditInput").value.trim();if(!to)return;
+  const r=await api.renameProject(f.dataset.from,to);editKey=null;
+  if(projFilter===f.dataset.from)projFilter=to.toLowerCase();
+  toast(r&&r.merged?`Объединено с «${to}»`:r&&r.changed?`Проект переименован в «${to}»`:"Ничего не изменилось");
+  renderProjects();
+});
+$("plist").addEventListener("keydown",e=>{
+  if(e.target.id==="peditInput"&&e.key==="Escape"){editKey=null;renderProjects();return}
+  if((e.key==="Enter"||e.key===" ")&&e.target.classList.contains("pcard")){e.preventDefault();e.target.click()}
+});
 $("plist").addEventListener("click",e=>{
+  const un=e.target.closest("[data-unalias]");if(un){api.removeAlias(un.dataset.unalias);toast("Названия отвязаны");return}
+  const ed=e.target.closest("[data-edit]");if(ed){e.stopPropagation();editKey=ed.dataset.edit;renderProjects();return}
+  if(e.target.closest("[data-cancel]")){editKey=null;renderProjects();return}
+  if(e.target.closest(".pedit"))return;
   const b=e.target.closest("[data-proj]");if(!b)return;
   projFilter=b.dataset.proj;renderProjects();renderLog();
   tab="sessions";lsSet(LST,tab);renderTabs();$("content").scrollTop=0;
@@ -498,7 +541,7 @@ let booted=false;
 function apply(st){
   sessions=st.sessions||[];stages=(st.stages&&st.stages.length)?st.stages:stages;
   settings=st.settings||settings;override=st.override||null;
-  focusState=st.focus||{phase:"idle"};pauseState=st.pause||null;breaks=st.breaks||[];
+  focusState=st.focus||{phase:"idle"};pauseState=st.pause||null;breaks=st.breaks||[];projectAliases=st.projectAliases||{};
   if(document.activeElement!==$("project")&&$("project").value!==(st.project||""))$("project").value=st.project||"";
   $("idleSel").value=String(settings.idleMinutes||5);
   $("miniToggle").checked=settings.mini!==false;$("hotkeyToggle").checked=settings.hotkeys!==false;

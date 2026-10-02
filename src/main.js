@@ -6,6 +6,7 @@
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, powerMonitor, dialog, shell, systemPreferences, globalShortcut, screen, Notification } = require("electron");
 const Focus = require("./focus");
 const Prof = require("./professions");
+const Projects = require("./projects");
 const path = require("path");
 const fs = require("fs");
 const { Engine, classify, toCSV } = require("./engine");
@@ -469,7 +470,7 @@ function manualToggle(cat, project) {
   const run = manualRunning();
   if (run) store.update(run.id, { end: now });
   if (run && run.cat === cat) return updateTray();
-  store.add({ cat, start: now, end: null, project: (project ?? store.state.project ?? "").trim(), source: "manual" });
+  store.add({ cat, start: now, end: null, project: Projects.resolveAlias((project ?? store.state.project ?? "").trim(), store.state.projectAliases), source: "manual" });
   updateTray();
 }
 
@@ -545,6 +546,7 @@ async function tick() {
       }
       if (key && st.override) key.stage = st.override;
       if (key && !key.project && st.project) key.project = st.project;
+      if (key && key.project) key.project = Projects.resolveAlias(key.project, st.projectAliases);
     }
     if (key) lastWorkAt = now;
     else if (st.override && now - lastWorkAt > OVERRIDE_RESET_MS) setOverride(null);
@@ -585,6 +587,25 @@ async function tick() {
 
 function setupIpc() {
   ipcMain.handle("professions:set", (_e, list) => setProfessions(list));
+  ipcMain.handle("projects:rename", (_e, fromKey, toName) => {
+    const r = Projects.renameProject(store.state.sessions, store.state.projectAliases, fromKey, toName);
+    if (!r.changed) return { changed: 0 };
+    store.state.sessions = r.sessions;
+    store.state.projectAliases = r.aliases;
+    // текущая автосессия тоже переходит на новое имя
+    if (engine && engine.cur && Projects.keyOf(engine.cur.project) === fromKey) engine.cur.project = String(toName).trim();
+    if (lastAutoKey && Projects.keyOf(lastAutoKey.project) === fromKey) lastAutoKey.project = String(toName).trim();
+    for (const k of Object.keys(memory)) if (Projects.keyOf(memory[k]) === fromKey) memory[k] = String(toName).trim();
+    if (Projects.keyOf(store.state.project) === fromKey) store.state.project = String(toName).trim();
+    store.changed();
+    updateTray();
+    return { changed: r.changed, merged: r.merged };
+  });
+  ipcMain.handle("projects:unalias", (_e, key) => {
+    const al = { ...(store.state.projectAliases || {}) };
+    delete al[key];
+    store.set("projectAliases", al);
+  });
   ipcMain.handle("state:get", () => ({ appVersion: app.getVersion(), catalog: Prof.catalog(), state: store.state, live, platform: process.platform, openAtLogin: app.getLoginItemSettings().openAtLogin, vibrancy: hasVibrancy, hotkeyLabel: HOTKEY_LABEL, hotkeyFailed: hotkeyResult.failed }));
   ipcMain.handle("mini:view", () => miniView);
   ipcMain.handle("mini:collapse", (_e, on) => setMiniCollapsed(!!on));
