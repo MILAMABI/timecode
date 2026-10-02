@@ -28,7 +28,9 @@ const clock = (t) => new Date(t).toLocaleTimeString("ru-RU", { hour: "2-digit", 
 function renderTop() {
   if (!state) return;
   const run = running(), auto = state.settings.auto, p = state.pause;
-  $("w").className = "w " + (p ? "paused" : run ? "on" : "off");
+  const w = $("w");
+  for (const c of ["paused", "on", "off"]) w.classList.toggle(c, c === (p ? "paused" : run && !live.inGrace ? "on" : "off"));
+  $("orb").title = `${p ? (p.endsAt ? "Перерыв · " + hms(Math.max(0, p.endsAt - Date.now())) : "Пауза") : run ? hms(elapsed(run)) + " · " + stageOf(run.cat).name : "Таймер стоит"} — нажми, чтобы развернуть`;
   $("tc").textContent = p ? hms(p.endsAt ? Math.max(0, p.endsAt - Date.now()) : Date.now() - p.start) : hms(run ? elapsed(run) : 0);
   $("pauseMini").innerHTML = p ? '<svg viewBox="0 0 10 10"><path d="M2 1v8l7-4z"/></svg>' : '<svg viewBox="0 0 10 10"><rect x="1.5" y="1" width="2.6" height="8" rx=".6"/><rect x="5.9" y="1" width="2.6" height="8" rx=".6"/></svg>';
   $("pauseMini").title = p ? "Вернуться к работе" : "Пауза";
@@ -76,16 +78,109 @@ $("chips").addEventListener("click", (e) => {
 });
 $("pauseMini").addEventListener("click", () => (state && state.pause ? api.resume() : api.startPause(null)));
 $("openMain").addEventListener("click", () => api.openMain());
-$("hideMini").addEventListener("click", () => api.hideMini());
+$("collapseMini").addEventListener("click", () => collapse());
 
 // Подгоняем высоту окна под содержимое.
 let lastH = 0;
 new ResizeObserver(() => {
+  if (view.collapsed || morphing) return;
   const h = Math.ceil($("w").getBoundingClientRect().height) + 16;
   if (h !== lastH) { lastH = h; api.miniResize(h); }
 }).observe($("w"));
 
-api.getState().then((r) => { state = r.state; live = r.live || {}; render(); });
+/* ---------- сворачивание в точку ---------- */
+let view = { collapsed: false, anchor: "right" }, morphing = false;
+const ORB_PX = 40;
+const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const EASE_IN = "cubic-bezier(.55,0,.2,1.12)";   // сжатие с лёгкой пружинкой в конце
+const EASE_OUT = "cubic-bezier(.2,.9,.25,1.06)"; // раскрытие с небольшим «перелётом»
+
+function applyAnchor() { document.body.classList.toggle("right", view.anchor === "right"); }
+
+async function collapse() {
+  if (view.collapsed || morphing) return;
+  morphing = true;
+  const w = $("w");
+  const from = w.getBoundingClientRect();
+  view = { ...view, anchor: (await api.miniView()).anchor }; // к какому краю прижиматься
+  applyAnchor();
+  w.style.width = from.width + "px"; w.style.height = from.height + "px";
+  w.classList.add("fading");
+  await new Promise((r) => setTimeout(r, reduced() ? 0 : 120));
+  w.classList.add("morphing");
+  if (!reduced()) {
+    await w.animate(
+      [{ width: from.width + "px", height: from.height + "px", borderRadius: "24px" },
+       { width: ORB_PX + "px", height: ORB_PX + "px", borderRadius: ORB_PX / 2 + "px" }],
+      { duration: 460, easing: EASE_IN, fill: "forwards" }
+    ).finished;
+  }
+  w.getAnimations().forEach((a) => a.cancel());
+  w.style.width = ""; w.style.height = "";
+  w.classList.remove("morphing", "fading");
+  w.classList.add("collapsed");
+  view = await api.miniCollapse(true);
+  applyAnchor();
+  morphing = false;
+}
+
+async function expand() {
+  if (!view.collapsed || morphing) return;
+  morphing = true;
+  const w = $("w");
+  view = await api.miniCollapse(false); // окно становится большим, кружок остаётся на месте
+  applyAnchor();
+  // меряем итоговый размер, не показывая его
+  w.classList.remove("collapsed");
+  w.style.visibility = "hidden"; w.style.width = ""; w.style.height = "";
+  const to = w.getBoundingClientRect();
+  w.style.visibility = "";
+  w.classList.add("morphing", "fading");
+  w.style.width = ORB_PX + "px"; w.style.height = ORB_PX + "px";
+  if (!reduced()) {
+    await w.animate(
+      [{ width: ORB_PX + "px", height: ORB_PX + "px", borderRadius: ORB_PX / 2 + "px" },
+       { width: to.width + "px", height: to.height + "px", borderRadius: "24px" }],
+      { duration: 520, easing: EASE_OUT, fill: "forwards" }
+    ).finished;
+  }
+  w.getAnimations().forEach((a) => a.cancel());
+  w.style.width = ""; w.style.height = "";
+  w.classList.remove("morphing");
+  requestAnimationFrame(() => w.classList.remove("fading"));
+  morphing = false;
+  lastH = 0; // пусть окно подстроит высоту под содержимое
+}
+
+// Кружок: клик — развернуть, потянуть — переместить.
+(() => {
+  const orb = $("orb");
+  let down = null, moved = false;
+  orb.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    down = { x: e.screenX, y: e.screenY }; moved = false;
+    orb.setPointerCapture(e.pointerId);
+  });
+  orb.addEventListener("pointermove", (e) => {
+    if (!down) return;
+    const dx = e.screenX - down.x, dy = e.screenY - down.y;
+    if (!moved && Math.hypot(dx, dy) < 4) return;
+    moved = true;
+    api.miniMoveBy(dx, dy);
+    down = { x: e.screenX, y: e.screenY };
+  });
+  orb.addEventListener("pointerup", () => { if (down && !moved) expand(); down = null; });
+  orb.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); expand(); } });
+})();
+if (api.onMiniToggle) api.onMiniToggle(() => (view.collapsed ? expand() : collapse()));
+
+api.getState().then(async (r) => {
+  state = r.state; live = r.live || {};
+  view = await api.miniView();
+  applyAnchor();
+  if (view.collapsed) $("w").classList.add("collapsed");
+  render();
+});
 api.onState((s) => { state = s; render(); });
 let lastKey = "";
 api.onLive((l) => {

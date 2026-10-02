@@ -90,20 +90,41 @@ function send(channel, payload) {
 /* ---------------- мини-виджет ---------------- */
 
 const MINI_W = 380;
+const ORB = 56; // окно свёрнутого виджета: кружок 40 px + поля по 8 px
+let miniView = { collapsed: false, anchor: "right", expandedH: 96 };
+
+// Положение храним всегда «как у развёрнутого» виджета, чтобы разворачивался он на своём месте.
+function onScreen(x, y) {
+  return screen.getAllDisplays().some((d) => {
+    const b = d.workArea;
+    return x >= b.x - 40 && y >= b.y - 40 && x < b.x + b.width - 40 && y < b.y + b.height - 40;
+  });
+}
+function anchorFor(x, w) {
+  const d = screen.getDisplayNearestPoint({ x: Math.round(x + w / 2), y: 0 }).workArea;
+  return x + w / 2 > d.x + d.width / 2 ? "right" : "left";
+}
+function clampToScreen(b) {
+  const d = screen.getDisplayMatching(b).workArea;
+  return {
+    ...b,
+    x: Math.min(Math.max(b.x, d.x), d.x + d.width - b.width),
+    y: Math.min(Math.max(b.y, d.y), d.y + d.height - b.height),
+  };
+}
 
 function createMini() {
   if (mini && !mini.isDestroyed()) return mini;
-  const pos = store.state.settings.miniPos;
+  const set = store.state.settings;
   const area = screen.getPrimaryDisplay().workArea;
   let x = area.x + area.width - MINI_W - 24, y = area.y + 24;
-  if (pos && screen.getAllDisplays().some((d) => {
-    const b = d.workArea;
-    return pos.x >= b.x - 40 && pos.y >= b.y - 40 && pos.x < b.x + b.width - 40 && pos.y < b.y + b.height - 40;
-  })) ({ x, y } = pos);
+  if (set.miniPos && onScreen(set.miniPos.x, set.miniPos.y)) ({ x, y } = set.miniPos);
+  miniView = { collapsed: !!set.miniCollapsed, anchor: anchorFor(x, MINI_W), expandedH: set.miniH || 96 };
+  const bounds = miniView.collapsed
+    ? { x: miniView.anchor === "right" ? x + MINI_W - ORB : x, y, width: ORB, height: ORB }
+    : { x, y, width: MINI_W, height: miniView.expandedH };
   mini = new BrowserWindow({
-    width: MINI_W,
-    height: 96,
-    x, y,
+    ...bounds,
     frame: false,
     transparent: true,
     backgroundColor: "#00000000",
@@ -128,14 +149,43 @@ function createMini() {
   let moveTimer = null;
   mini.on("moved", () => {
     clearTimeout(moveTimer);
-    moveTimer = setTimeout(() => {
-      if (!mini || mini.isDestroyed()) return;
-      const [mx, my] = mini.getPosition();
-      store.set("settings", { ...store.state.settings, miniPos: { x: mx, y: my } });
-    }, 400);
+    moveTimer = setTimeout(saveMiniPos, 400);
   });
   mini.on("closed", () => { mini = null; });
   return mini;
+}
+
+function saveMiniPos() {
+  if (!mini || mini.isDestroyed()) return;
+  const b = mini.getBounds();
+  let x = b.x;
+  if (miniView.collapsed) {
+    miniView.anchor = anchorFor(b.x, ORB);
+    if (miniView.anchor === "right") x = b.x + ORB - MINI_W;
+  }
+  store.set("settings", { ...store.state.settings, miniPos: { x, y: b.y } });
+}
+
+/** Свернуть в кружок / развернуть. Кружок остаётся на том же месте экрана. */
+function setMiniCollapsed(on) {
+  if (!mini || mini.isDestroyed()) return miniView;
+  const b = mini.getBounds();
+  if (on && !miniView.collapsed) {
+    miniView.anchor = anchorFor(b.x, b.width);
+    miniView.expandedH = b.height;
+    mini.setBounds({ x: miniView.anchor === "right" ? b.x + b.width - ORB : b.x, y: b.y, width: ORB, height: ORB });
+    miniView.collapsed = true;
+  } else if (!on && miniView.collapsed) {
+    miniView.anchor = anchorFor(b.x, ORB);
+    const x = miniView.anchor === "right" ? b.x + ORB - MINI_W : b.x;
+    mini.setBounds(clampToScreen({ x, y: b.y, width: MINI_W, height: miniView.expandedH }));
+    miniView.collapsed = false;
+  }
+  store.state.settings = { ...store.state.settings, miniCollapsed: miniView.collapsed, miniH: miniView.expandedH };
+  store.changed();
+  saveMiniPos();
+  updateTray();
+  return miniView;
 }
 
 // Сторож: если виджет включён, а окно пропало или спряталось (смена рабочего стола,
@@ -270,6 +320,7 @@ function updateTray() {
   items.push({ type: "separator" });
   items.push({ label: "Автотрекинг", type: "checkbox", checked: auto, click: (mi) => setSettings({ auto: mi.checked }) });
   items.push({ label: "Мини-виджет поверх окон", type: "checkbox", checked: !!st.settings.mini, click: (mi) => setSettings({ mini: mi.checked }) });
+  if (st.settings.mini) items.push({ label: miniView.collapsed ? "Развернуть виджет" : "Свернуть виджет в точку", click: () => send("mini:toggle", null) });
   items.push({ label: "Открыть трекер", click: showWindow });
   items.push({ label: "О программе", click: () => (isMac ? app.showAboutPanel() : (showWindow(), send("nav", "settings"))) });
   items.push({ type: "separator" });
@@ -530,11 +581,19 @@ async function tick() {
 function setupIpc() {
   ipcMain.handle("professions:set", (_e, list) => setProfessions(list));
   ipcMain.handle("state:get", () => ({ appVersion: app.getVersion(), catalog: Prof.catalog(), state: store.state, live, platform: process.platform, openAtLogin: app.getLoginItemSettings().openAtLogin, vibrancy: hasVibrancy, hotkeyLabel: HOTKEY_LABEL, hotkeyFailed: hotkeyResult.failed }));
-  ipcMain.handle("mini:resize", (_e, h) => {
+  ipcMain.handle("mini:view", () => miniView);
+  ipcMain.handle("mini:collapse", (_e, on) => setMiniCollapsed(!!on));
+  ipcMain.handle("mini:moveBy", (_e, dx, dy) => {
     if (!mini || mini.isDestroyed()) return;
+    const [x, y] = mini.getPosition();
+    mini.setPosition(Math.round(x + dx), Math.round(y + dy));
+  });
+  ipcMain.handle("mini:resize", (_e, h) => {
+    if (!mini || mini.isDestroyed() || miniView.collapsed) return;
     const height = Math.max(60, Math.min(400, Math.round(h)));
     const [w] = mini.getSize();
     mini.setSize(w, height);
+    miniView.expandedH = height;
   });
   ipcMain.handle("mini:openMain", () => showWindow());
   ipcMain.handle("mini:hide", () => setSettings({ mini: false }));
