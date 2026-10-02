@@ -1,0 +1,59 @@
+{
+  "name": "timecode-tracker",
+  "productName": "Timecode",
+  "version": "1.0.0",
+  "description": "Рабочий таймкод — трекер времени для монтажёра: монтаж, цветкор, саунд-дизайн, VFX. Автоматически пишет время в Premiere Pro и DaVinci Resolve.",
+  "main": "src/main.js",
+  "author": "Миша",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/engine.test.js && node test/store.test.js",
+    "dist:mac": "electron-builder --mac dmg --universal --publish never",
+    "dist:win": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "app.timecode.tracker",
+    "productName": "Timecode",
+    "files": [
+      "src/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "helpers/resolve_helper.py", "to": "resolve_helper.py" },
+      { "from": "assets", "to": "assets", "filter": ["tray*.png"] }
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "identity": null,
+      "extendInfo": {
+        "LSUIElement": false,
+        "NSAppleEventsUsageDescription": "Таймкоду нужно видеть, какая программа открыта (Premiere, Resolve), чтобы считать рабочее время."
+      }
+    },
+    "dmg": {
+      "title": "Timecode"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Рабочий таймкод"
+    }
+  }
+}

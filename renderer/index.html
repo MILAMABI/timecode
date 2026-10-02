@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:">
+<title>Рабочий таймкод</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap">
+<style>
+/* Layout: an edit bay in one column — transport panel with timecode and four "clip" buttons, then a timeline track of where the time went, a 7-day chart, and the session log. Dark-first like an NLE. */
+:root{
+  --bg:#111317; --panel:#191c21; --panel-2:#20242a; --line:#2b3038; --fg:#e9ebef; --muted:#8a92a0;
+  --rec:#ff4d4f; --focus:#8fb4ff;
+  --c1:#5b8def; --c2:#e5a93b; --c3:#3cc28f; --c4:#b47cf0; --c5:#ec6a8c; --c6:#39b8c9; --c7:#f07a45; --c8:#9aa4b4;
+  --f-display:"Unbounded","Manrope",system-ui,sans-serif;
+  --f-body:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f3f4f6; --panel:#ffffff; --panel-2:#eceef2; --line:#d7dbe2; --fg:#16191e; --muted:#5d6573;
+    --rec:#e0282b; --focus:#2f5fd0;
+    --c1:#2f68d8; --c2:#b97a0c; --c3:#108a5f; --c4:#8645cc; --c5:#c8345c; --c6:#0e8597; --c7:#c9501a; --c8:#5f6b7d;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f3f4f6; --panel:#ffffff; --panel-2:#eceef2; --line:#d7dbe2; --fg:#16191e; --muted:#5d6573;
+  --rec:#e0282b; --focus:#2f5fd0;
+  --c1:#2f68d8; --c2:#b97a0c; --c3:#108a5f; --c4:#8645cc; --c5:#c8345c; --c6:#0e8597; --c7:#c9501a; --c8:#5f6b7d;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:880px;margin:0 auto;padding-inline:16px;padding-block:20px 48px;display:flex;flex-direction:column;gap:20px}
+h1,h2{margin:0;text-wrap:balance}
+h1{font-family:var(--f-display);font-weight:700;font-size:1.15rem;letter-spacing:.01em}
+h2{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+.num,.tc{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.sync{font-size:.78rem;color:var(--muted)}
+
+/* Transport */
+.transport{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:18px}
+.monitor{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.status{display:flex;align-items:center;gap:10px;font-weight:600;min-width:0}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--line);flex:none}
+.running .dot{background:var(--rec);animation:blink 1.2s steps(2,start) infinite}
+@keyframes blink{to{opacity:.25}}
+.tc{font-size:clamp(2.1rem,8vw,3.6rem);font-weight:700;letter-spacing:.02em;line-height:1}
+.tc .ff{color:var(--muted)}
+.idle .tc{color:var(--muted)}
+.proj{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.proj label{font-size:.8rem;color:var(--muted)}
+.proj input{flex:1;min-width:0;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.clips{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.clip{--c:var(--c1);position:relative;text-align:left;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px 12px 12px 18px;cursor:pointer;display:flex;flex-direction:column;gap:2px;transition:background .15s,border-color .15s}
+.clip::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;border-radius:10px 0 0 10px;background:var(--c)}
+.clip:hover{border-color:var(--c)}
+.clip .name{font-weight:700}
+.clip .meta{font-size:.78rem;color:var(--muted)}
+.clip kbd{position:absolute;right:10px;top:10px;font-family:var(--f-mono);font-size:.7rem;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+.clip[aria-pressed="true"]{background:color-mix(in srgb,var(--c) 22%,var(--panel-2));border-color:var(--c)}
+.clip[aria-pressed="true"] .meta{color:var(--fg)}
+.hint{font-size:.78rem;color:var(--muted);margin:0}
+
+/* Sections */
+section{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px}
+.seg button{border:0;background:none;padding:5px 12px;border-radius:999px;cursor:pointer;font-size:.85rem;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--fg);font-weight:600}
+
+.total{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.total .big{font-family:var(--f-display);font-size:1.9rem;font-weight:700}
+.total .sub{color:var(--muted);font-size:.9rem}
+.track{display:flex;height:28px;border-radius:6px;overflow:hidden;background:var(--panel-2);border:1px solid var(--line)}
+.track span{height:100%;min-width:2px}
+.legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.leg{display:flex;flex-direction:column;gap:2px;padding-left:10px;border-left:3px solid var(--c)}
+.leg .lname{font-size:.8rem;color:var(--muted)}
+.leg .lval{font-weight:700}
+.leg .lpct{font-size:.78rem;color:var(--muted)}
+
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;overflow-x:auto}
+.chart svg{display:block;width:100%;min-width:420px;height:auto}
+.chart text{fill:var(--muted);font-family:var(--f-mono);font-size:11px}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .today{fill:var(--fg);font-weight:700}
+
+/* Log */
+.log{display:flex;flex-direction:column;gap:14px}
+.day h3{margin:0 0 6px;font-size:.85rem;font-weight:700;display:flex;justify-content:space-between;gap:8px}
+.day h3 .num{color:var(--muted);font-weight:400}
+.entries{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.entry{display:grid;grid-template-columns:8px minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:10px 12px;border-top:1px solid var(--line)}
+.entry:first-child{border-top:0}
+.entry .bar{width:8px;align-self:stretch;border-radius:3px;background:var(--c)}
+.entry .what{min-width:0}
+.entry .what b{font-weight:700}
+.entry .what small{display:block;color:var(--muted);font-size:.78rem;overflow-wrap:anywhere}
+.entry .dur{font-weight:600}
+.entry .live{color:var(--rec)}
+.del{background:none;border:1px solid transparent;border-radius:6px;color:var(--muted);cursor:pointer;padding:4px 8px;font-size:.8rem}
+.del:hover{border-color:var(--line);color:var(--fg)}
+.del.armed{color:var(--rec);border-color:var(--rec)}
+.empty{border:1px dashed var(--line);border-radius:10px;padding:18px;color:var(--muted);text-align:center}
+
+details.manual{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+details.manual summary{cursor:pointer;font-weight:600}
+.mform{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:12px;align-items:end}
+.mform label{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted)}
+.mform input,.mform select{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--fg);min-width:0}
+.btn{background:var(--fg);color:var(--bg);border:0;border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer}
+
+/* Stage editor */
+details.stages{border-top:1px solid var(--line);padding-top:14px}
+details.stages summary{cursor:pointer;font-weight:600;font-size:.9rem}
+.slist{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.srow{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:8px;align-items:center}
+.srow.arch{opacity:.55}
+.srow input,.sadd input{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0;width:100%}
+.swatch{width:28px;height:28px;border-radius:7px;border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line);cursor:pointer}
+.ghost{background:none;border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--muted);font-size:.82rem;white-space:nowrap}
+.ghost:hover{color:var(--fg)}
+.ghost.armed{color:var(--rec);border-color:var(--rec)}
+.sadd{display:flex;gap:8px;margin-top:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{background:var(--panel-2);border:1px dashed var(--line);border-radius:999px;padding:4px 10px;font-size:.8rem;cursor:pointer;color:var(--muted)}
+.chip:hover{color:var(--fg);border-style:solid}
+.slabel{font-size:.75rem;color:var(--muted);margin:12px 0 0}
+/* Projects + all-time line */
+.alltime{margin:-12px 0 0;font-size:.8rem;color:var(--muted)}
+.alltime b{color:var(--fg);font-weight:600}
+.view{display:flex;flex-direction:column;gap:20px}
+.plist{display:flex;flex-direction:column;gap:10px}
+.pcard{display:flex;flex-direction:column;gap:10px;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer}
+.pcard:hover{border-color:var(--muted)}
+.pcard[aria-pressed="true"]{border-color:var(--fg)}
+.phead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.pname{font-weight:700;font-size:1rem;overflow-wrap:anywhere;min-width:0}
+.pname.none{color:var(--muted);font-style:italic}
+.ptotal{font-family:var(--f-display);font-weight:700;font-size:1.1rem}
+.pmeta{font-size:.78rem;color:var(--muted)}
+.pcard .track{height:10px;border-radius:4px}
+.pstages{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.8rem}
+.pstages span{display:inline-flex;align-items:center;gap:6px}
+.pstages i{width:8px;height:8px;border-radius:2px;background:var(--c);display:inline-block}
+.pstages em{font-style:normal;color:var(--muted)}
+.pfilter{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:.8rem;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.importrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.importbtn{display:inline-block;color:var(--fg)}
+.stagesel{background:transparent;border:0;padding:0 2px 0 0;font-weight:700;cursor:pointer;max-width:100%;color:var(--fg)}
+.stagesel:hover{text-decoration:underline}
+.tag{margin-left:8px;font-size:.7rem;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px;white-space:nowrap}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.88rem;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:reduce){.running .dot{animation:none}.clip{transition:none}}
+
+/* App additions */
+body{margin:0}
+[hidden]{display:none!important}
+.autobar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;position:relative}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.knob{width:38px;height:22px;border-radius:999px;background:var(--line);position:relative;transition:background .15s;flex:none}
+.knob::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--fg);transition:transform .15s}
+.switch input:checked+.knob{background:var(--c3)}
+.switch input:checked+.knob::after{transform:translateX(16px);background:#fff}
+.switch input:focus-visible+.knob{outline:2px solid var(--focus);outline-offset:2px}
+.autoinfo{font-size:.82rem;color:var(--muted);min-width:0}
+.banner{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:.85rem}
+.clip .ovr{font-size:.7rem;font-weight:700;color:var(--c);text-transform:uppercase;letter-spacing:.08em}
+.settings{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.check{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.9rem}
+.check select{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:5px 8px;color:var(--fg)}
+@media (prefers-reduced-motion:reduce){.knob,.knob::after{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Рабочий таймкод</h1>
+  </header>
+  <p class="alltime num" id="alltime"></p>
+
+  <div class="transport idle" id="transport">
+    <div class="autobar">
+      <label class="switch" for="autoToggle"><input type="checkbox" id="autoToggle" role="switch"><span class="knob" aria-hidden="true"></span><span class="swlabel">Автотрекинг</span></label>
+      <span class="autoinfo" id="autoInfo"></span>
+    </div>
+    <div class="banner" id="accessBanner" hidden><span>Чтобы видеть, какая программа открыта, macOS нужно разрешение «Универсальный доступ» для «Рабочего таймкода».</span><button type="button" class="ghost" id="accessBtn">Открыть настройки</button></div>
+    <div class="banner" id="overrideBanner" hidden><span id="overrideText"></span><button type="button" class="ghost" id="overrideReset">Вернуть авто</button></div>
+    <div class="monitor">
+      <div class="status"><span class="dot"></span><span id="statusText">Таймер стоит</span></div>
+      <div class="tc" id="tc" aria-live="off">00:00:00<span class="ff">:00</span></div>
+    </div>
+    <div class="proj">
+      <label for="project">Проект</label>
+      <input id="project" list="projList" placeholder="например, клип для бренда" maxlength="80" autocomplete="off">
+      <datalist id="projList"></datalist>
+    </div>
+    <div class="clips" id="clips"></div>
+    <p class="hint" id="hint"></p>
+    <details class="stages" id="stagesBox">
+      <summary>Настроить этапы</summary>
+      <div class="slist" id="slist"></div>
+      <form class="sadd" id="sadd"><input id="sName" placeholder="Новый этап, например «Субтитры»" maxlength="30" autocomplete="off" aria-label="Название нового этапа"><button class="btn" type="submit">Добавить</button></form>
+      <p class="slabel" id="chipsLabel">Быстро добавить:</p>
+      <div class="chips" id="chips"></div>
+    </details>
+  </div>
+
+  <div class="row viewbar">
+    <div class="seg" id="tabs" role="group" aria-label="Разрез">
+      <button data-t="stages" aria-pressed="true">По этапам</button>
+      <button data-t="projects" aria-pressed="false">По проектам</button>
+    </div>
+      <div class="seg" id="period" role="group" aria-label="Период">
+        <button data-p="today" aria-pressed="false">Сегодня</button>
+        <button data-p="week" aria-pressed="true">Неделя</button>
+        <button data-p="month" aria-pressed="false">Месяц</button>
+        <button data-p="all" aria-pressed="false">Всё</button>
+      </div>
+  </div>
+
+  <div id="viewStages" class="view">
+  <section>
+    <h2>Куда ушло время</h2>
+    <div class="total"><span class="big num" id="total">0 мин</span><span class="sub" id="totalSub"></span></div>
+    <div class="track" id="track" aria-hidden="true"></div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section>
+    <h2>Последние 7 дней</h2>
+    <div class="chart" id="chart"></div>
+  </section>
+  </div>
+
+  <div id="viewProjects" class="view" hidden>
+  <section>
+    <h2>Проекты за период</h2>
+    <div class="plist" id="plist"></div>
+  </section>
+  </div>
+
+  <section>
+    <div class="row"><h2>Сессии</h2><button type="button" class="pfilter" id="pfilter" hidden></button></div>
+    <details class="manual" id="manual">
+      <summary>Добавить сессию вручную</summary>
+      <form class="mform" id="mform">
+        <label>Этап<select id="mCat"></select></label>
+        <label>Дата<input type="date" id="mDate" required></label>
+        <label>Начало<input type="time" id="mStart" required value="10:00"></label>
+        <label>Длительность (ч:мм)<input id="mDur" required placeholder="1:30" inputmode="numeric" pattern="\d{1,2}:\d{2}"></label>
+        <label>Проект<input id="mProj" list="projList" maxlength="80" autocomplete="off"></label>
+        <button class="btn" type="submit">Добавить</button>
+      </form>
+    </details>
+    <div class="importrow">
+      <button type="button" class="ghost importbtn" id="exportBtn">Экспорт в CSV</button>
+      <label class="ghost importbtn" for="importFile">Импорт CSV</label>
+      <input type="file" id="importFile" accept=".csv,text/csv" hidden>
+    </div>
+    <div class="log" id="log"></div>
+  </section>
+  <section>
+    <details class="manual">
+      <summary>Настройки</summary>
+      <div class="settings">
+        <label class="check"><input type="checkbox" id="loginToggle"> Запускать при входе в систему</label>
+        <label class="check">Считать, что я отошёл, если не трогаю мышь и клавиатуру
+          <select id="idleSel"><option value="3">3 мин</option><option value="5">5 мин</option><option value="10">10 мин</option><option value="15">15 мин</option></select></label>
+        <p class="pmeta" id="resolveNote"></p>
+        <p class="pmeta">Окно можно закрыть: трекер продолжит работать в <span id="trayWord">трее</span>. Выйти полностью — через меню иконки.</p>
+        <div><button type="button" class="ghost" id="revealBtn">Показать файл с данными</button></div>
+      </div>
+    </details>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="renderer.js"></script>
+</body>
+</html>
