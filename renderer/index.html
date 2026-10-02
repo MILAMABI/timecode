@@ -392,6 +392,7 @@ body:not(.vib) .toolbar{background:transparent;backdrop-filter:blur(20px) satura
 .obnote{font-size:12px;color:var(--secondary)}
 .pill:disabled{opacity:.45;filter:grayscale(.4)}
 .prow-apps{font-size:11.5px;color:var(--secondary)}
+.aboutico{width:40px;height:40px;border-radius:10px}
 .prow .pdot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none;margin-right:2px}
 
 @media (max-width:720px){
@@ -538,6 +539,13 @@ body:not(.vib) .toolbar{background:transparent;backdrop-filter:blur(20px) satura
       <div class="group">
         <div class="row"><span class="rl">Запускать при входе в систему</span><label class="switch" for="loginToggle"><input type="checkbox" id="loginToggle" role="switch"><span class="knob" aria-hidden="true"></span></label></div>
         <div class="row"><span class="rl">Данные<small>Хранятся только на этом компьютере</small></span><button type="button" class="ghost" id="revealBtn">Показать файл</button></div>
+      </div>
+
+      <h2 class="section-title">О программе</h2>
+      <div class="group about">
+        <div class="row"><span class="rl"><b>Рабочий таймкод</b><small id="aboutVer">Версия</small></span><img class="aboutico" src="icon.png" alt=""></div>
+        <div class="row"><span class="rl">Автор и правообладатель<small>© 2026 MILAMABI. Все права защищены.</small></span><span class="num" style="color:var(--secondary)">github.com/MILAMABI</span></div>
+        <div class="row"><span class="rl"><small>Проприетарное ПО. Копирование, изменение, декомпиляция и распространение без письменного разрешения автора запрещены.</small></span></div>
       </div>
       <p class="foot">Окно можно закрыть: трекер продолжит работать в <span id="trayWord">трее</span>. Выйти полностью можно через меню иконки.</p>
     </div>

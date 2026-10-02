@@ -1,3 +1,8 @@
+/*!
+ * Рабочий таймкод (Timecode)
+ * © 2026 MILAMABI. Все права защищены. Проприетарное ПО — см. LICENSE.
+ * Копирование, изменение и распространение без разрешения автора запрещены.
+ */
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("api", {
@@ -25,4 +30,5 @@ contextBridge.exposeInMainWorld("api", {
   hideMini: () => ipcRenderer.invoke("mini:hide"),
   onState: (fn) => ipcRenderer.on("state", (_e, s) => fn(s)),
   onLive: (fn) => ipcRenderer.on("live", (_e, l) => fn(l)),
+  onNav: (fn) => ipcRenderer.on("nav", (_e, t) => fn(t)),
 });

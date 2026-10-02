@@ -1,3 +1,8 @@
+/*!
+ * Рабочий таймкод (Timecode)
+ * © 2026 MILAMABI. Все права защищены. Проприетарное ПО — см. LICENSE.
+ * Копирование, изменение и распространение без разрешения автора запрещены.
+ */
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, powerMonitor, dialog, shell, systemPreferences, globalShortcut, screen, Notification } = require("electron");
 const Focus = require("./focus");
 const Prof = require("./professions");
@@ -256,6 +261,7 @@ function updateTray() {
   items.push({ label: "Автотрекинг", type: "checkbox", checked: auto, click: (mi) => setSettings({ auto: mi.checked }) });
   items.push({ label: "Мини-виджет поверх окон", type: "checkbox", checked: !!st.settings.mini, click: (mi) => setSettings({ mini: mi.checked }) });
   items.push({ label: "Открыть трекер", click: showWindow });
+  items.push({ label: "О программе", click: () => (isMac ? app.showAboutPanel() : (showWindow(), send("nav", "settings"))) });
   items.push({ type: "separator" });
   items.push({ label: "Выйти", click: () => { quitting = true; app.quit(); } });
   tray.setContextMenu(Menu.buildFromTemplate(items));
@@ -512,7 +518,7 @@ async function tick() {
 
 function setupIpc() {
   ipcMain.handle("professions:set", (_e, list) => setProfessions(list));
-  ipcMain.handle("state:get", () => ({ catalog: Prof.catalog(), state: store.state, live, platform: process.platform, openAtLogin: app.getLoginItemSettings().openAtLogin, vibrancy: hasVibrancy, hotkeyLabel: HOTKEY_LABEL, hotkeyFailed: hotkeyResult.failed }));
+  ipcMain.handle("state:get", () => ({ appVersion: app.getVersion(), catalog: Prof.catalog(), state: store.state, live, platform: process.platform, openAtLogin: app.getLoginItemSettings().openAtLogin, vibrancy: hasVibrancy, hotkeyLabel: HOTKEY_LABEL, hotkeyFailed: hotkeyResult.failed }));
   ipcMain.handle("mini:resize", (_e, h) => {
     if (!mini || mini.isDestroyed()) return;
     const height = Math.max(60, Math.min(400, Math.round(h)));
@@ -577,6 +583,12 @@ powerMonitor.on("lock-screen", () => { if (engine) engine.close(); });
 
 app.whenReady().then(() => {
   app.setAppUserModelId && app.setAppUserModelId("app.timecode.tracker");
+  app.setAboutPanelOptions({
+    applicationName: "Рабочий таймкод",
+    applicationVersion: app.getVersion(),
+    copyright: "© 2026 MILAMABI. Все права защищены.",
+    credits: "Автор и правообладатель: MILAMABI\ngithub.com/MILAMABI",
+  });
   store = new Store(app.getPath("userData"), (state) => send("state", state));
   store.repair();
   setupEngine();

@@ -1,22 +1,24 @@
 {
   "name": "timecode-tracker",
   "productName": "Timecode",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Рабочий таймкод — трекер времени для креативщиков: видео, фото, дизайн, моушн, звук. Сам пишет время в рабочих программах и раскладывает по этапам и проектам.",
   "main": "src/main.js",
-  "author": "Миша",
-  "license": "UNLICENSED",
+  "author": "MILAMABI",
+  "license": "SEE LICENSE IN LICENSE",
   "private": true,
   "scripts": {
     "start": "electron .",
     "test": "node test/engine.test.js && node test/store.test.js && node test/focus.test.js && node test/professions.test.js",
     "dist:win": "electron-builder --win nsis --x64 --publish never",
     "dist:mac-arm": "electron-builder --mac dmg --arm64 --publish never",
-    "dist:mac-intel": "electron-builder --mac dmg --x64 --publish never"
+    "dist:mac-intel": "electron-builder --mac dmg --x64 --publish never",
+    "obfuscate": "node build/obfuscate.js"
   },
   "devDependencies": {
     "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "javascript-obfuscator": "^4.1.1"
   },
   "build": {
     "appId": "app.timecode.tracker",
@@ -37,6 +39,10 @@
         "filter": [
           "tray*.png"
         ]
+      },
+      {
+        "from": "LICENSE",
+        "to": "LICENSE.txt"
       }
     ],
     "directories": {
@@ -64,9 +70,11 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "Рабочий таймкод"
+      "shortcutName": "Рабочий таймкод",
+      "license": "LICENSE"
     },
     "compression": "maximum",
-    "afterPack": "build/afterPack.js"
+    "afterPack": "build/afterPack.js",
+    "copyright": "© 2026 MILAMABI. Все права защищены."
   }
 }

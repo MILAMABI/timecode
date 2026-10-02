@@ -1,3 +1,8 @@
+/*!
+ * Рабочий таймкод (Timecode)
+ * © 2026 MILAMABI. Все права защищены. Проприетарное ПО — см. LICENSE.
+ * Копирование, изменение и распространение без разрешения автора запрещены.
+ */
 
 const PALETTE=["c1","c2","c3","c4","c5","c6","c7","c8"];
 const DEFAULT_STAGES=[
@@ -508,6 +513,7 @@ period=lsGet(LSP,"week");tab=lsGet(LST,"timer");if(!VIEWS[tab])tab="timer";
 document.querySelectorAll("#period button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.p===period));
 api.getState().then(r=>{
   platform=r.platform;live=r.live||{};catalog=r.catalog||[];
+  $("aboutVer").textContent=`Версия ${r.appVersion||""} · трекер времени для креативщиков`;
   document.body.classList.add(platform==="darwin"?"mac":platform==="win32"?"win":"other");
   if(r.vibrancy)document.body.classList.add("vib");
   $("trayWord").textContent=platform==="darwin"?"строке меню":"трее (возле часов)";
@@ -555,3 +561,5 @@ $("profList").addEventListener("change",e=>{
   if(!next.length){i.checked=true;toast("Нужно оставить хотя бы одно направление");return}
   api.setProfessions(next);if(i.checked)toast("Этапы направления добавлены");
 });
+
+if(api.onNav)api.onNav(t=>{if(VIEWS[t]){tab=t;renderTabs();$("content").scrollTop=$("content").scrollHeight}});

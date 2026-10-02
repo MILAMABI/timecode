@@ -1,3 +1,8 @@
+/*!
+ * Рабочий таймкод (Timecode)
+ * © 2026 MILAMABI. Все права защищены. Проприетарное ПО — см. LICENSE.
+ * Копирование, изменение и распространение без разрешения автора запрещены.
+ */
 // Пауза, перерывы и фокус-блоки. Чистая логика над состоянием: на вход старое состояние, на выход новое.
 //   focus: { phase: "idle" | "work" | "done", start, endsAt, minutes, doneAt }
 //   pause: null | { start, endsAt | null, minutes | null, resumeCat, resumeProject }
