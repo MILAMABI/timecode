@@ -10,8 +10,9 @@
   "scripts": {
     "start": "electron .",
     "test": "node test/engine.test.js && node test/store.test.js",
-    "dist:mac": "electron-builder --mac dmg --universal --publish never",
-    "dist:win": "electron-builder --win nsis --x64 --publish never"
+    "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "dist:mac-arm": "electron-builder --mac dmg --arm64 --publish never",
+    "dist:mac-intel": "electron-builder --mac dmg --x64 --publish never"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -26,8 +27,17 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "helpers/resolve_helper.py", "to": "resolve_helper.py" },
-      { "from": "assets", "to": "assets", "filter": ["tray*.png"] }
+      {
+        "from": "helpers/resolve_helper.py",
+        "to": "resolve_helper.py"
+      },
+      {
+        "from": "assets",
+        "to": "assets",
+        "filter": [
+          "tray*.png"
+        ]
+      }
     ],
     "directories": {
       "buildResources": "build",
@@ -43,7 +53,8 @@
       }
     },
     "dmg": {
-      "title": "Timecode"
+      "title": "Timecode",
+      "artifactName": "Timecode-${version}-${arch}.dmg"
     },
     "win": {
       "icon": "build/icon.png",
@@ -54,6 +65,7 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "shortcutName": "Рабочий таймкод"
-    }
+    },
+    "compression": "maximum"
   }
 }

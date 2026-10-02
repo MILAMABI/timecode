@@ -12,11 +12,17 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            script: dist:mac
+            script: dist:mac-arm
             files: dist/*.dmg
+            name: macOS-AppleSilicon
+          - os: macos-latest
+            script: dist:mac-intel
+            files: dist/*.dmg
+            name: macOS-Intel
           - os: windows-latest
             script: dist:win
             files: dist/*.exe
+            name: Windows
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +36,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
       - uses: actions/upload-artifact@v4
         with:
-          name: Timecode-${{ runner.os }}
+          name: Timecode-${{ matrix.name }}
           path: ${{ matrix.files }}
 
   release:
