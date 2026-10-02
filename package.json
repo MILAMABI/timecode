@@ -1,7 +1,7 @@
 {
   "name": "timecode-tracker",
   "productName": "Timecode",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Рабочий таймкод — трекер времени для креативщиков: видео, фото, дизайн, моушн, звук. Сам пишет время в рабочих программах и раскладывает по этапам и проектам.",
   "main": "src/main.js",
   "author": "MILAMABI",

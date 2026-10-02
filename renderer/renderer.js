@@ -48,7 +48,9 @@ function endOf(s){
   }
   return Date.now();
 }
-const dur=s=>Math.max(0,endOf(s)-s.start);
+// away — время, когда отвлёкся на другие программы внутри сессии; оно не считается
+const awayOf=s=>s.end==null&&s.source==="auto"&&s.id===live.sessionId?(live.away||0):(s.away||0);
+const dur=s=>Math.max(0,endOf(s)-s.start-awayOf(s));
 function startOfDay(t){const d=new Date(t);d.setHours(0,0,0,0);return d.getTime()}
 function periodStart(p){
   const now=new Date();

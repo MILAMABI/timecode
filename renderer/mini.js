@@ -16,8 +16,10 @@ function running() {
   return state.sessions.find((s) => s.end == null && (s.source !== "auto" || s.id === live.sessionId)) || null;
 }
 function elapsed(s) {
-  const end = s.source === "auto" && live.inGrace ? live.last || Date.now() : Date.now();
-  return Math.max(0, end - s.start);
+  const auto = s.source === "auto";
+  const end = auto && live.inGrace ? live.last || Date.now() : Date.now();
+  const away = auto && s.id === live.sessionId ? live.away || 0 : s.away || 0;
+  return Math.max(0, end - s.start - away);
 }
 function hms(ms) {
   const t = Math.floor(ms / 1000), p = (n) => String(n).padStart(2, "0");

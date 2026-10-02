@@ -268,7 +268,7 @@ function currentLine() {
   if (auto && live.tracking && live.sessionId) {
     const s = store.find(live.sessionId);
     if (s) {
-      const t = hms((live.inGrace ? live.last : Date.now()) - s.start);
+      const t = hms((live.inGrace ? live.last : Date.now()) - s.start - (live.away || 0));
       return { text: `${stageName(s.cat)} · ${t}`, short: t, stage: stageName(s.cat) };
     }
   }
@@ -492,8 +492,12 @@ function setupEngine() {
       updateTray();
     },
     close(cur) {
-      store.update(cur.sessionId, { end: cur.end, lastSeen: cur.end });
+      store.update(cur.sessionId, { end: cur.end, lastSeen: cur.end, away: cur.away || 0 });
       updateTray();
+    },
+    resume(cur) {
+      // вернулся после короткой отлучки — сразу сохраняем, сколько вычесть
+      store.update(cur.sessionId, { lastSeen: cur.last, away: cur.away || 0 });
     },
     discard(cur) {
       store.remove(cur.sessionId);
@@ -550,7 +554,7 @@ async function tick() {
     const cur = engine.cur;
     if (cur && cur.sessionId && cur === before && now - (cur.persistedAt || 0) > 30_000) {
       cur.persistedAt = now;
-      store.update(cur.sessionId, { lastSeen: cur.last }, { silent: true });
+      store.update(cur.sessionId, { lastSeen: cur.last, away: cur.away || 0 }, { silent: true });
     }
     live = {
       tracking: !!cur,
@@ -565,6 +569,7 @@ async function tick() {
       idle: idleMs >= idleLimit,
       frontApp: fw.app,
       inGrace: !!(cur && !key),
+      away: cur ? cur.away || 0 : 0,
       paused: false,
     };
   } catch (e) {

@@ -77,10 +77,20 @@ class Engine {
     }
     const c = this.cur;
     if (!key) {
+      // отвлёкся: запоминаем, с какого момента не работаем; это время в сессию не войдёт
+      if (c && c.awaySince == null) c.awaySince = c.last;
       if (c && now - c.last > this.grace) this.close();
       return;
     }
     if (c && this.sameKey(key) && now - c.last <= this.grace) {
+      if (c.awaySince != null) {
+        // вернулся в течение минуты: та же сессия, но отлучка вычитается
+        c.away = (c.away || 0) + Math.max(0, now - c.awaySince);
+        c.awaySince = null;
+        c.last = now;
+        this.hooks.resume && this.hooks.resume(c);
+        return;
+      }
       c.last = now;
       return;
     }
@@ -94,7 +104,8 @@ class Engine {
     this.cur = null;
     if (!c) return;
     c.end = c.last;
-    if (c.last - c.start >= this.minSession) this.hooks.close && this.hooks.close(c);
+    c.away = c.away || 0;
+    if (c.last - c.start - c.away >= this.minSession) this.hooks.close && this.hooks.close(c);
     else this.hooks.discard && this.hooks.discard(c);
   }
 }
@@ -116,7 +127,7 @@ function toCSV(sessions, stages) {
     .sort((a, b) => a.start - b.start)
     .forEach((s) => {
       const id = String(s.id).startsWith("auto-") ? s.id : `auto-${s.start}`;
-      rows.push([id, s.start, s.end, s.cat, name(s.cat), s.project || "", s.app || "", local(s.start), ((s.end - s.start) / 60000).toFixed(1)]);
+      rows.push([id, s.start, s.end, s.cat, name(s.cat), s.project || "", s.app || "", local(s.start), ((s.end - s.start - (s.away || 0)) / 60000).toFixed(1)]);
     });
   return "﻿" + rows.map((r) => r.map(q).join(",")).join("\r\n") + "\r\n";
 }

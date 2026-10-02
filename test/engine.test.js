@@ -30,10 +30,16 @@ function run(steps) {
 const P = { stage: "edit", project: "Nike", app: "Premiere" };
 const C = { stage: "color", project: "Nike", app: "Premiere" };
 
-// короткая отлучка (30 c) не рвёт сессию
+// короткая отлучка (30 c) не рвёт сессию, но время отлучки не засчитывается
 let r = run([[100, P], [15, null], [50, P]]);
 assert.strictEqual(r.closed.length, 1);
 assert.strictEqual(r.closed[0].end - r.closed[0].start, 328_000);
+assert.strictEqual(r.closed[0].away, 32_000);
+assert.strictEqual(r.closed[0].end - r.closed[0].start - r.closed[0].away, 296_000);
+// две отлучки складываются
+r = run([[50, P], [10, null], [50, P], [10, null], [20, P]]);
+assert.strictEqual(r.closed.length, 1);
+assert.strictEqual(r.closed[0].away, 22_000 * 2);
 
 // долгая отлучка (90 c) рвёт сессию, конец — момент ухода
 r = run([[100, P], [45, null], [50, P]]);
