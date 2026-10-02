@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com">
+<title>Таймкод — виджет</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&family=Manrope:wght@600;700&display=swap">
+<style>
+/* Мини-виджет: всегда тёмный, чтобы читаться поверх тёмного интерфейса монтажки. */
+:root{
+  --panel:rgba(20,22,27,.94); --line:rgba(255,255,255,.09); --fg:#eef0f3; --muted:#8e96a3; --rec:#ff4d4f;
+  --c1:#5b8def; --c2:#e5a93b; --c3:#3cc28f; --c4:#b47cf0; --c5:#ec6a8c; --c6:#39b8c9; --c7:#f07a45; --c8:#9aa4b4;
+  --f-body:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:transparent;overflow:hidden;font-family:var(--f-body);color:var(--fg);font-size:12px;-webkit-user-select:none;user-select:none}
+[hidden]{display:none!important}
+.w{margin:6px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px 8px 9px;display:flex;flex-direction:column;gap:7px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.top{display:flex;align-items:center;gap:8px;-webkit-app-region:drag;cursor:grab;min-width:0}
+.dot{width:9px;height:9px;border-radius:50%;background:#3a3f48;flex:none}
+.on .dot{background:var(--rec);animation:blink 1.2s steps(2,start) infinite}
+@keyframes blink{to{opacity:.3}}
+.tc{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;letter-spacing:.02em}
+.off .tc{color:var(--muted)}
+.what{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-weight:600}
+.on .what{color:var(--fg)}
+.ic{-webkit-app-region:no-drag;background:none;border:0;color:var(--muted);width:22px;height:22px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;flex:none}
+.ic:hover{background:rgba(255,255,255,.08);color:var(--fg)}
+.chips{display:flex;flex-wrap:wrap;gap:5px;-webkit-app-region:no-drag}
+.chip{--c:var(--c1);display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:999px;padding:4px 9px 4px 7px;color:var(--fg);font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
+.chip i{width:8px;height:8px;border-radius:3px;background:var(--c);flex:none}
+.chip:hover{border-color:var(--c)}
+.chip.cur{background:color-mix(in srgb,var(--c) 30%,transparent);border-color:var(--c)}
+.chip.ovr{box-shadow:inset 0 0 0 1px var(--c)}
+.chip kbd{font-family:var(--f-mono);font-size:9px;color:var(--muted)}
+.chip.auto{--c:var(--muted)}
+.chip.auto.cur{--c:var(--c3)}
+.chip.stop{--c:var(--rec)}
+:focus-visible{outline:2px solid #8fb4ff;outline-offset:1px}
+@media (prefers-reduced-motion:reduce){.on .dot{animation:none}}
+</style>
+</head>
+<body>
+<div class="w off" id="w">
+  <div class="top">
+    <span class="dot" aria-hidden="true"></span>
+    <span class="tc" id="tc">0:00:00</span>
+    <span class="what" id="what">Загрузка…</span>
+    <button class="ic" id="openMain" title="Открыть трекер" aria-label="Открыть трекер">⤢</button>
+    <button class="ic" id="hideMini" title="Скрыть виджет" aria-label="Скрыть виджет">×</button>
+  </div>
+  <div class="chips" id="chips"></div>
+</div>
+<script src="mini.js"></script>
+</body>
+</html>

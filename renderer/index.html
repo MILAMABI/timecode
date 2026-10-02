@@ -273,6 +273,9 @@ body{margin:0}
       <summary>Настройки</summary>
       <div class="settings">
         <label class="check"><input type="checkbox" id="loginToggle"> Запускать при входе в систему</label>
+        <label class="check"><input type="checkbox" id="miniToggle"> Мини-виджет поверх всех окон</label>
+        <label class="check"><input type="checkbox" id="hotkeyToggle"> Горячие клавиши в любой программе: <b class="num" id="hotkeyLabel"></b> — этап по номеру, 0 — вернуть авто или остановить</label>
+        <p class="pmeta" id="hotkeyWarn" hidden></p>
         <label class="check">Считать, что я отошёл, если не трогаю мышь и клавиатуру
           <select id="idleSel"><option value="3">3 мин</option><option value="5">5 мин</option><option value="10">10 мин</option><option value="15">15 мин</option></select></label>
         <p class="pmeta" id="resolveNote"></p>

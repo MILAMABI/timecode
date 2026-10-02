@@ -401,6 +401,7 @@ function apply(st){
   settings=st.settings||settings;override=st.override||null;
   if(document.activeElement!==$("project")&&$("project").value!==(st.project||""))$("project").value=st.project||"";
   $("idleSel").value=String(settings.idleMinutes||5);
+  $("miniToggle").checked=settings.mini!==false;$("hotkeyToggle").checked=settings.hotkeys!==false;
   render();
 }
 $("autoToggle").addEventListener("change",e=>{settings.auto=e.target.checked;renderStatus();api.setSettings({auto:e.target.checked})});
@@ -408,6 +409,9 @@ $("accessBtn").addEventListener("click",()=>api.requestAccess());
 $("overrideReset").addEventListener("click",()=>api.setOverride(null));
 $("loginToggle").addEventListener("change",e=>api.setSettings({openAtLogin:e.target.checked}));
 $("idleSel").addEventListener("change",e=>api.setSettings({idleMinutes:+e.target.value}));
+$("miniToggle").addEventListener("change",e=>api.setSettings({mini:e.target.checked}));
+$("hotkeyToggle").addEventListener("change",async e=>{await api.setSettings({hotkeys:e.target.checked});const r=await api.getState();showHotkeyWarn(r)});
+function showHotkeyWarn(r){const f=r.hotkeyFailed||[];$("hotkeyWarn").hidden=!(settings.hotkeys!==false&&f.length);$("hotkeyWarn").textContent=f.length?`Не удалось занять клавиши с цифрами ${f.join(", ")}: их уже использует другая программа.`:""}
 $("revealBtn").addEventListener("click",()=>api.revealData());
 $("exportBtn").addEventListener("click",async()=>{const r=await api.exportCSV();if(r&&r.ok)toast(`Сохранено ${r.count} ${plural(r.count,"сессия","сессии","сессий")}`)});
 
@@ -417,7 +421,8 @@ api.getState().then(r=>{
   platform=r.platform;live=r.live||{};
   $("trayWord").textContent=platform==="darwin"?"строке меню":"трее (возле часов)";
   $("loginToggle").checked=!!r.openAtLogin;
-  booted=true;apply(r.state);
+  $("hotkeyLabel").textContent=r.hotkeyLabel||"";
+  booted=true;apply(r.state);showHotkeyWarn(r);
 });
 api.onState(st=>{if(booted)apply(st)});
 let lastLiveKey="";

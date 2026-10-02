@@ -7,7 +7,7 @@ const DEFAULTS = {
   version: 1,
   sessions: [],
   stages: DEFAULT_STAGES.map((s) => ({ ...s })),
-  settings: { auto: true, idleMinutes: 5 },
+  settings: { auto: true, idleMinutes: 5, mini: true, hotkeys: true },
   override: null,
 };
 

@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld("api", {
   requestAccess: () => ipcRenderer.invoke("access:request"),
   exportCSV: () => ipcRenderer.invoke("export:csv"),
   revealData: () => ipcRenderer.invoke("data:reveal"),
+  miniResize: (h) => ipcRenderer.invoke("mini:resize", h),
+  openMain: () => ipcRenderer.invoke("mini:openMain"),
+  hideMini: () => ipcRenderer.invoke("mini:hide"),
   onState: (fn) => ipcRenderer.on("state", (_e, s) => fn(s)),
   onLive: (fn) => ipcRenderer.on("live", (_e, l) => fn(l)),
 });

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, powerMonitor, dialog, shell, systemPreferences } = require("electron");
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, powerMonitor, dialog, shell, systemPreferences, globalShortcut, screen } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { Engine, classify, toCSV } = require("./engine");
@@ -15,6 +15,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let win = null;
+let mini = null;
 let tray = null;
 let store = null;
 let engine = null;
@@ -23,6 +24,8 @@ const front = new FrontWindow();
 let resolveHelper = null;
 const memory = {};
 let lastWorkAt = Date.now();
+let hotkeyResult = { ok: true, failed: [] };
+let lastAutoKey = null;
 let live = { tracking: false, app: "", stage: null, project: "", last: null, sessionId: null, needsAccess: false, resolve: "idle", idle: false, frontApp: "" };
 
 /* ---------------- окно ---------------- */
@@ -66,7 +69,87 @@ function showWindow() {
 }
 
 function send(channel, payload) {
-  if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+  for (const w of [win, mini]) if (w && !w.isDestroyed()) w.webContents.send(channel, payload);
+}
+
+/* ---------------- мини-виджет ---------------- */
+
+const MINI_W = 380;
+
+function createMini() {
+  if (mini && !mini.isDestroyed()) return mini;
+  const pos = store.state.settings.miniPos;
+  const area = screen.getPrimaryDisplay().workArea;
+  let x = area.x + area.width - MINI_W - 24, y = area.y + 24;
+  if (pos && screen.getAllDisplays().some((d) => {
+    const b = d.workArea;
+    return pos.x >= b.x - 40 && pos.y >= b.y - 40 && pos.x < b.x + b.width - 40 && pos.y < b.y + b.height - 40;
+  })) ({ x, y } = pos);
+  mini = new BrowserWindow({
+    width: MINI_W,
+    height: 96,
+    x, y,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    show: false,
+    focusable: false, // клик по виджету не уводит фокус из Premiere
+    acceptFirstMouse: true,
+    ...(isMac ? { type: "panel" } : {}),
+    title: "Таймкод — виджет",
+    webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  mini.setAlwaysOnTop(true, isMac ? "floating" : "screen-saver");
+  if (isMac) mini.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  mini.loadFile(path.join(__dirname, "..", "renderer", "mini.html"));
+  mini.once("ready-to-show", () => mini.showInactive());
+  let moveTimer = null;
+  mini.on("moved", () => {
+    clearTimeout(moveTimer);
+    moveTimer = setTimeout(() => {
+      if (!mini || mini.isDestroyed()) return;
+      const [mx, my] = mini.getPosition();
+      store.set("settings", { ...store.state.settings, miniPos: { x: mx, y: my } });
+    }, 400);
+  });
+  mini.on("closed", () => { mini = null; });
+  return mini;
+}
+
+function setMini(on) {
+  if (on) createMini();
+  else if (mini && !mini.isDestroyed()) mini.close();
+}
+
+/* ---------------- горячие клавиши ---------------- */
+
+const HOTKEY_PREFIX = isMac ? "Control+Alt+Command+" : "Control+Alt+Shift+";
+const HOTKEY_LABEL = isMac ? "⌃⌥⌘ + цифра" : "Ctrl+Alt+Shift + цифра";
+
+function registerHotkeys() {
+  globalShortcut.unregisterAll();
+  if (!store.state.settings.hotkeys) return { ok: true, failed: [] };
+  const failed = [];
+  for (let n = 0; n <= 9; n++) {
+    const ok = globalShortcut.register(HOTKEY_PREFIX + n, () => onHotkey(n));
+    if (!ok) failed.push(n);
+  }
+  return { ok: failed.length === 0, failed };
+}
+
+function onHotkey(n) {
+  if (n === 0) {
+    if (store.state.settings.auto) setOverride(null);
+    else manualStop();
+    return;
+  }
+  const s = activeStages()[n - 1];
+  if (s) manualToggle(s.id);
 }
 
 /* ---------------- трей / строка меню ---------------- */
@@ -102,17 +185,20 @@ function currentLine() {
   const auto = store.state.settings.auto;
   if (auto && live.tracking && live.sessionId) {
     const s = store.find(live.sessionId);
-    if (s) return { text: `${stageName(s.cat)} · ${hms((live.last || Date.now()) - s.start)}`, short: hms((live.last || Date.now()) - s.start) };
+    if (s) {
+      const t = hms((live.inGrace ? live.last : Date.now()) - s.start);
+      return { text: `${stageName(s.cat)} · ${t}`, short: t, stage: stageName(s.cat) };
+    }
   }
   const m = manualRunning();
-  if (m) return { text: `${stageName(m.cat)} · ${hms(Date.now() - m.start)}`, short: hms(Date.now() - m.start) };
+  if (m) return { text: `${stageName(m.cat)} · ${hms(Date.now() - m.start)}`, short: hms(Date.now() - m.start), stage: stageName(m.cat) };
   return null;
 }
 
 function updateTrayTitle() {
   if (!tray) return;
   const cur = currentLine();
-  if (isMac) tray.setTitle(cur ? ` ${cur.short}` : "", { fontType: "monospacedDigit" });
+  if (isMac) tray.setTitle(cur ? ` ${cur.short} · ${cur.stage}` : "", { fontType: "monospacedDigit" });
   tray.setToolTip(cur ? `Рабочий таймкод — ${cur.text}` : "Рабочий таймкод — пауза");
 }
 
@@ -134,12 +220,13 @@ function updateTray() {
   } else {
     activeStages().forEach((s, i) => {
       const m = manualRunning();
-      items.push({ label: `${m && m.cat === s.id ? "■ Остановить: " : "▶ "}${s.name}`, accelerator: i < 9 ? undefined : undefined, click: () => manualToggle(s.id) });
+      items.push({ label: `${m && m.cat === s.id ? "■ Остановить: " : "▶ "}${s.name}`, click: () => manualToggle(s.id) });
     });
     if (manualRunning()) items.push({ label: "Остановить таймер", click: manualStop });
   }
   items.push({ type: "separator" });
   items.push({ label: "Автотрекинг", type: "checkbox", checked: auto, click: (mi) => setSettings({ auto: mi.checked }) });
+  items.push({ label: "Мини-виджет поверх окон", type: "checkbox", checked: !!st.settings.mini, click: (mi) => setSettings({ mini: mi.checked }) });
   items.push({ label: "Открыть трекер", click: showWindow });
   items.push({ type: "separator" });
   items.push({ label: "Выйти", click: () => { quitting = true; app.quit(); } });
@@ -164,6 +251,8 @@ function setSettings(patch) {
     else engine.close();
   }
   store.set("settings", s);
+  if ("mini" in patch) setMini(!!patch.mini);
+  if ("hotkeys" in patch) hotkeyResult = registerHotkeys();
   updateTray();
 }
 
@@ -228,7 +317,14 @@ async function tick() {
         if (!resolveHelper) resolveHelper = new ResolveHelper(resolveHelperPath(app.isPackaged, process.resourcesPath, __dirname));
         resolveInfo = resolveHelper.poke();
       }
-      key = classify({ appName: fw.app, title: fw.title, resolveInfo, override: st.override, memory });
+      if (/timecode|electron/i.test(fw.app)) {
+        // кликнул в наше окно — продолжаем то, что было в монтажке
+        key = lastAutoKey ? { ...lastAutoKey } : null;
+      } else {
+        key = classify({ appName: fw.app, title: fw.title, resolveInfo, override: null, memory });
+        lastAutoKey = key ? { ...key } : null;
+      }
+      if (key && st.override) key.stage = st.override;
       if (key && !key.project && st.project) key.project = st.project;
     }
     if (key) lastWorkAt = now;
@@ -266,7 +362,15 @@ async function tick() {
 /* ---------------- IPC ---------------- */
 
 function setupIpc() {
-  ipcMain.handle("state:get", () => ({ state: store.state, live, platform: process.platform, openAtLogin: app.getLoginItemSettings().openAtLogin }));
+  ipcMain.handle("state:get", () => ({ state: store.state, live, platform: process.platform, openAtLogin: app.getLoginItemSettings().openAtLogin, hotkeyLabel: HOTKEY_LABEL, hotkeyFailed: hotkeyResult.failed }));
+  ipcMain.handle("mini:resize", (_e, h) => {
+    if (!mini || mini.isDestroyed()) return;
+    const height = Math.max(60, Math.min(400, Math.round(h)));
+    const [w] = mini.getSize();
+    mini.setSize(w, height);
+  });
+  ipcMain.handle("mini:openMain", () => showWindow());
+  ipcMain.handle("mini:hide", () => setSettings({ mini: false }));
   ipcMain.handle("session:add", (_e, data) => { store.add(data); updateTray(); });
   ipcMain.handle("session:update", (_e, id, patch) => { store.update(id, patch); updateTray(); });
   ipcMain.handle("session:remove", (_e, id) => {
@@ -310,6 +414,7 @@ app.on("before-quit", () => {
   if (engine) engine.close();
   if (store) store.flush();
   front.stop();
+  globalShortcut.unregisterAll();
   if (resolveHelper) resolveHelper.stop();
 });
 powerMonitor.on("suspend", () => { if (engine) engine.close(); });
@@ -325,6 +430,8 @@ app.whenReady().then(() => {
   const login = app.getLoginItemSettings();
   const hidden = process.argv.includes("--hidden") || login.wasOpenedAsHidden || login.wasOpenedAtLogin;
   createWindow(!hidden);
+  hotkeyResult = registerHotkeys();
+  if (store.state.settings.mini) createMini();
   if (hidden && isMac && app.dock) app.dock.hide();
   setInterval(tick, POLL_MS);
   setInterval(updateTray, 60_000);
