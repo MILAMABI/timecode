@@ -159,7 +159,18 @@ function renderClips(){
       <span class="meta num">${ovr?"вручную · ":on?"идёт · ":""}сегодня ${fmtHM(t)}</span></span></button>`;
   }).join("");
 }
-const APPS_TEXT="Premiere, Resolve, After Effects или Audition";
+let catalog=[];
+const PROF_COLOR={video:"var(--c1)",photo:"var(--c2)",design:"var(--c4)",motion:"var(--c7)",audio:"var(--c3)"};
+const PROF_ICON={
+  video:'<svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="M16 10.5l5-3v9l-5-3"/></svg>',
+  photo:'<svg viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6H8l1.5-2h5L16 6h1.5A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.5"/></svg>',
+  design:'<svg viewBox="0 0 24 24"><path d="M12 3l7 7-4 9H9l-4-9z"/><circle cx="12" cy="11" r="1.6"/><path d="M12 3v6.4M9 19h6"/></svg>',
+  motion:'<svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>',
+  audio:'<svg viewBox="0 0 24 24"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4"/></svg>'
+};
+const myProfs=()=>settings.professions&&settings.professions.length?settings.professions:["video"];
+function trackedApps(){const set=[];catalog.filter(p=>myProfs().includes(p.id)).forEach(p=>p.apps.forEach(a=>{if(!set.includes(a))set.push(a)}));return set}
+function appsLine(list,max=4){return list.length>max?`${list.slice(0,max).join(", ")} и ещё ${list.length-max}`:list.join(", ")}
 function renderStatus(){
   const run=running();
   document.documentElement.style.setProperty("--glow",pauseState?"var(--c2)":run?cvar(stageOf(run.cat)):"var(--c1)");
@@ -171,13 +182,13 @@ function renderStatus(){
   let text;
   if(pauseState)text=pauseState.endsAt?`Перерыв · вернёмся в ${fmtClock(pauseState.endsAt)}`:"Пауза · трекер не пишет время";
   else if(run)text=`${stageOf(run.cat).name}${run.project?" · "+run.project:""}${run.app?" ("+run.app+")":""}${live.inGrace?" · отвлёкся":""}`;
-  else if(settings.auto)text=live.idle?"Пауза: тебя нет за компом":"Ждёт "+APPS_TEXT.replace(" или "," / ");
+  else if(settings.auto)text=live.idle?"Пауза: тебя нет за компом":"Ждёт рабочую программу";
   else text="Таймер стоит";
   $("statusText").textContent=text;
   $("autoToggle").checked=!!settings.auto;
-  $("autoInfo").textContent=settings.auto?"Пишет время, пока открыт Premiere, Resolve, After Effects или Audition":"Запускай таймер кнопками этапов";
+  $("autoInfo").textContent=settings.auto?`Следит за: ${appsLine(trackedApps())}`:"Запускай таймер кнопками этапов";$("autoInfo").title=trackedApps().join(", ");
   $("hint").textContent=settings.auto
-    ?"Этап определяется сам. Нажми другой, если в Premiere занялся цветом или звуком."
+    ?"Этап определяется по программе. Занялся другим этапом в той же программе — нажми его."
     :"Нажми этап, чтобы запустить. Тот же этап — стоп.";
   $("accessBanner").hidden=!(settings.auto&&live.needsAccess);
   const ob=settings.auto&&override;
@@ -187,6 +198,7 @@ function renderStatus(){
     no_api:"Страницы DaVinci Resolve не определяются: не найден скриптовый модуль Resolve. Время в Resolve пишется как «Монтаж».",
     no_connect:"Resolve не отвечает скриптам. Включи Preferences → System → General → External scripting using: Local. В бесплатной версии это может не работать.",
     ok:"DaVinci Resolve подключён: этап определяется по открытой странице."}[live.resolve];
+  $("resolveRow").hidden=!myProfs().includes("video");
   $("resolveNote").textContent=rs||"DaVinci Resolve: этап определяется по открытой странице (Edit, Color, Fairlight, Fusion, Deliver), если Resolve пускает скрипты.";
 }
 function totalsBy(list){
@@ -327,7 +339,7 @@ function renderSideNow(){
   $("sideNow").hidden=!show;
   if(show){$("sideNowL").textContent=stageOf(run.cat).name+(run.project?" · "+run.project:"");const t=Math.floor(dur(run)/1000);$("sideNowV").textContent=`${Math.floor(t/3600)}:${String(Math.floor(t%3600/60)).padStart(2,"0")}:${String(t%60).padStart(2,"0")}`}
 }
-function render(){if(!booted)return;renderFocus();renderStatus();renderClips();renderTabs();renderSummary();renderChart();renderProjects();renderLog();renderEditor();renderManualSelect();renderAllTime();renderProjList();tick()}
+function render(){if(!booted)return;renderOnboard();renderProfSettings();renderFocus();renderStatus();renderClips();renderTabs();renderSummary();renderChart();renderProjects();renderLog();renderEditor();renderManualSelect();renderAllTime();renderProjList();tick()}
 
 function tick(){
   const run=running();
@@ -495,7 +507,7 @@ $("exportBtn").addEventListener("click",async()=>{const r=await api.exportCSV();
 period=lsGet(LSP,"week");tab=lsGet(LST,"timer");if(!VIEWS[tab])tab="timer";
 document.querySelectorAll("#period button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.p===period));
 api.getState().then(r=>{
-  platform=r.platform;live=r.live||{};
+  platform=r.platform;live=r.live||{};catalog=r.catalog||[];
   document.body.classList.add(platform==="darwin"?"mac":platform==="win32"?"win":"other");
   if(r.vibrancy)document.body.classList.add("vib");
   $("trayWord").textContent=platform==="darwin"?"строке меню":"трее (возле часов)";
@@ -509,4 +521,37 @@ api.onLive(l=>{
   live=l||{};if(!booted)return;
   const k=[live.sessionId,live.tracking,live.idle,live.inGrace,live.needsAccess,live.resolve].join("|");
   if(k!==lastLiveKey){lastLiveKey=k;render()}else{renderStatus();tick()}
+});
+
+/* ---------- направления ---------- */
+let obSel=null;
+function renderOnboard(){
+  const need=booted&&!(settings.professions&&settings.professions.length);
+  $("onboard").hidden=!need;
+  if(!need)return;
+  if(obSel===null)obSel=sessions.length?["video"]:[];
+  $("obGrid").innerHTML=catalog.map(p=>{
+    const on=obSel.includes(p.id);
+    return `<button type="button" class="obcard" data-prof="${p.id}" aria-pressed="${on}" style="--c:${PROF_COLOR[p.id]}">
+      <span class="obhead"><span class="obico">${PROF_ICON[p.id]||""}</span><span><span class="obname">${esc(p.name)}</span><br><span class="obdesc">${esc(p.desc)}</span></span>
+      <span class="obcheck"><svg viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3 4.7-4.9"/></svg></span></span>
+      <span class="obapps">${esc(appsLine(p.apps,5))}</span>
+      <span class="obstages">${p.stages.filter(x=>x.id!=="revisions").map(x=>`<span>${esc(x.name)}</span>`).join("")}</span>
+    </button>`}).join("");
+  $("obGo").disabled=!obSel.length;
+  $("obNote").textContent=sessions.length?"Твои этапы и статистика сохранятся — добавятся только новые этапы.":obSel.length>1?"Этапы направлений объединятся в один список.":"Можно выбрать несколько.";
+}
+$("obGrid").addEventListener("click",e=>{const b=e.target.closest("[data-prof]");if(!b)return;const id=b.dataset.prof;obSel=obSel.includes(id)?obSel.filter(x=>x!==id):[...obSel,id];renderOnboard()});
+$("obGo").addEventListener("click",async()=>{if(!obSel.length)return;await api.setProfessions(obSel);tab="timer";lsSet(LST,tab);toast("Готово — трекер настроен под твою работу")});
+function renderProfSettings(){
+  if(!catalog.length)return;
+  $("profList").innerHTML=catalog.map(p=>{const on=myProfs().includes(p.id)&&!!(settings.professions&&settings.professions.length);
+    return `<div class="row prow" style="--c:${PROF_COLOR[p.id]}"><span class="pdot"></span><span class="rl">${esc(p.name)}<small class="prow-apps">${esc(appsLine(p.apps,6))}</small></span>
+    <label class="switch" for="prof-${p.id}"><input type="checkbox" id="prof-${p.id}" data-prof="${p.id}" role="switch" ${on?"checked":""}><span class="knob" aria-hidden="true"></span></label></div>`}).join("");
+}
+$("profList").addEventListener("change",e=>{
+  const i=e.target.closest("[data-prof]");if(!i)return;const id=i.dataset.prof;const cur=myProfs();
+  let next=i.checked?[...cur.filter(x=>x!==id),id]:cur.filter(x=>x!==id);
+  if(!next.length){i.checked=true;toast("Нужно оставить хотя бы одно направление");return}
+  api.setProfessions(next);if(i.checked)toast("Этапы направления добавлены");
 });

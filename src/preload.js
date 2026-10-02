@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("api", {
   removeSession: (id) => ipcRenderer.invoke("session:remove", id),
   setStages: (stages) => ipcRenderer.invoke("stages:set", stages),
   setSettings: (patch) => ipcRenderer.invoke("settings:set", patch),
+  setProfessions: (list) => ipcRenderer.invoke("professions:set", list),
   setProject: (name) => ipcRenderer.invoke("project:set", name),
   toggleTimer: (cat, project) => ipcRenderer.invoke("timer:toggle", cat, project),
   stopTimer: () => ipcRenderer.invoke("timer:stop"),

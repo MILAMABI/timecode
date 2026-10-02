@@ -30,7 +30,7 @@ function renderTop() {
   let what;
   if (p) what = p.endsAt ? `Перерыв до ${clock(p.endsAt)}` : "Пауза";
   else if (run) what = `${stageOf(run.cat).name}${run.project ? " · " + run.project : ""}${live.inGrace ? " · отвлёкся" : ""}`;
-  else if (auto) what = live.idle ? "Пауза — тебя нет" : "Ждёт Premiere / Resolve";
+  else if (auto) what = live.idle ? "Пауза — тебя нет" : "Ждёт рабочую программу";
   else what = "Таймер стоит";
   $("what").textContent = what;
   $("what").title = what;

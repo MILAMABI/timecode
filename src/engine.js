@@ -9,47 +9,38 @@ const DEFAULT_STAGES = [
   { id: "revisions", name: "Правки клиента", color: "c5" },
 ];
 
-// Программа → этап. Ищем подстроку в имени процесса (без учёта регистра).
-// stage: null значит «этап берётся из страницы Resolve».
-const APPS = [
-  { needles: ["premiere"], label: "Premiere", stage: "edit" },
-  { needles: ["resolve"], label: "Resolve", stage: null },
-  { needles: ["after effects", "afterfx"], label: "After Effects", stage: "vfx" },
-  { needles: ["audition"], label: "Audition", stage: "sound" },
-];
-
-const RESOLVE_PAGES = {
-  media: "edit", cut: "edit", edit: "edit",
-  color: "color", fairlight: "sound", fusion: "vfx", deliver: "render",
-};
+const { APPS, RESOLVE_PAGES, appsFor, stageFor } = require("./professions");
 
 function premiereProject(title) {
   const m = /([^/\\]+?)\.prproj/i.exec(title || "");
   return m ? m[1].trim() : "";
 }
 
-function matchApp(appName) {
+function matchApp(appName, professions) {
   const low = String(appName || "").toLowerCase();
-  return APPS.find((a) => a.needles.some((n) => low.includes(n))) || null;
+  if (!low) return null;
+  return appsFor(professions).find((a) => a.needles.some((n) => low.includes(n))) || null;
 }
 
 /**
  * Что сейчас делаем: {stage, project, app} или null, если это не рабочая программа.
+ * professions: выбранные направления (какие программы отслеживать и какой этап им ставить).
  * resolveInfo: {page, project} от помощника Resolve или null.
  * override: этап, выбранный вручную (перекрывает автоматический).
  * memory: объект, где помним последний известный проект для каждой программы.
  */
-function classify({ appName, title, resolveInfo, override, memory }) {
-  const app = matchApp(appName);
+function classify({ appName, title, resolveInfo, override, memory, professions }) {
+  const app = matchApp(appName, professions);
   if (!app) return null;
-  let stage = app.stage;
+  let stage = stageFor(app, professions);
   let project = "";
-  if (app.label === "Premiere") project = premiereProject(title);
-  if (app.label === "Resolve") {
+  if (app.resolve) {
     if (resolveInfo && resolveInfo.page) stage = RESOLVE_PAGES[resolveInfo.page.toLowerCase()] || "edit";
     project = (resolveInfo && resolveInfo.project) || "";
+  } else if (app.project) {
+    try { project = app.project(title) || ""; } catch { project = ""; }
   }
-  if (!stage) stage = "edit";
+  if (project.length > 80) project = project.slice(0, 80);
   if (project) memory[app.label] = project;
   else project = memory[app.label] || "";
   return { stage: override || stage, project, app: app.label };

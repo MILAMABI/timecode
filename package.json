@@ -1,15 +1,15 @@
 {
   "name": "timecode-tracker",
   "productName": "Timecode",
-  "version": "1.4.0",
-  "description": "Рабочий таймкод — трекер времени для монтажёра: монтаж, цветкор, саунд-дизайн, VFX. Автоматически пишет время в Premiere Pro и DaVinci Resolve.",
+  "version": "1.5.0",
+  "description": "Рабочий таймкод — трекер времени для креативщиков: видео, фото, дизайн, моушн, звук. Сам пишет время в рабочих программах и раскладывает по этапам и проектам.",
   "main": "src/main.js",
   "author": "Миша",
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/engine.test.js && node test/store.test.js && node test/focus.test.js",
+    "test": "node test/engine.test.js && node test/store.test.js && node test/focus.test.js && node test/professions.test.js",
     "dist:win": "electron-builder --win nsis --x64 --publish never",
     "dist:mac-arm": "electron-builder --mac dmg --arm64 --publish never",
     "dist:mac-intel": "electron-builder --mac dmg --x64 --publish never"
@@ -49,7 +49,7 @@
       "identity": null,
       "extendInfo": {
         "LSUIElement": false,
-        "NSAppleEventsUsageDescription": "Таймкоду нужно видеть, какая программа открыта (Premiere, Resolve), чтобы считать рабочее время."
+        "NSAppleEventsUsageDescription": "Таймкоду нужно видеть, какая программа открыта (Premiere, Lightroom, Figma и другие), чтобы считать рабочее время."
       }
     },
     "dmg": {

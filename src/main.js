@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, powerMonitor, dialog, shell, systemPreferences, globalShortcut, screen, Notification } = require("electron");
 const Focus = require("./focus");
+const Prof = require("./professions");
 const path = require("path");
 const fs = require("fs");
 const { Engine, classify, toCSV } = require("./engine");
@@ -224,7 +225,7 @@ function updateTray() {
   const auto = st.settings.auto;
   const cur = currentLine();
   const items = [];
-  items.push({ label: cur ? `${cur.paused ? "☕" : "⏺"} ${cur.text}` : auto ? "Ждёт Premiere или Resolve" : "Таймер стоит", enabled: false });
+  items.push({ label: cur ? `${cur.paused ? "☕" : "⏺"} ${cur.text}` : auto ? "Ждёт рабочую программу" : "Таймер стоит", enabled: false });
   if (auto && live.tracking && live.project) items.push({ label: `Проект: ${live.project}`, enabled: false });
   if (st.focus && st.focus.phase === "work") items.push({ label: `Фокус-блок до ${clock(st.focus.endsAt)}`, enabled: false });
   items.push({ type: "separator" });
@@ -280,6 +281,35 @@ function setSettings(patch) {
   store.set("settings", s);
   if ("mini" in patch) setMini(!!patch.mini);
   if ("hotkeys" in patch) hotkeyResult = registerHotkeys();
+  updateTray();
+}
+
+/* ---------------- профессии ---------------- */
+
+function setProfessions(list) {
+  const ids = (Array.isArray(list) ? list : []).filter((id) => Prof.PROFESSIONS.some((p) => p.id === id));
+  if (!ids.length) return;
+  const wanted = Prof.stagesFor(ids);
+  const st = store.state;
+  const pristine = !st.settings.professions && st.sessions.length === 0;
+  let stages;
+  if (pristine) {
+    stages = wanted; // новый пользователь — сразу набор под его профессии
+  } else {
+    // уже есть данные — ничего не убираем, только добавляем недостающие этапы
+    stages = st.stages.map((s) => ({ ...s }));
+    const used = new Set(stages.filter((s) => !s.archived).map((s) => s.color));
+    for (const w of wanted) {
+      const ex = stages.find((s) => s.id === w.id);
+      if (ex) { if (ex.archived) ex.archived = false; continue; }
+      const color = used.has(w.color) ? (["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"].find((c) => !used.has(c)) || w.color) : w.color;
+      used.add(color);
+      stages.push({ ...w, color });
+    }
+  }
+  store.state.stages = stages;
+  store.state.settings = { ...st.settings, professions: ids };
+  store.changed();
   updateTray();
 }
 
@@ -437,7 +467,9 @@ async function tick() {
         // кликнул в наше окно — продолжаем то, что было в монтажке
         key = lastAutoKey ? { ...lastAutoKey } : null;
       } else {
-        key = classify({ appName: fw.app, title: fw.title, resolveInfo, override: null, memory });
+        key = classify({ appName: fw.app, title: fw.title, resolveInfo, override: null, memory, professions: st.settings.professions });
+        // этап программы мог быть убран пользователем — тогда пишем в первый активный
+        if (key && !activeStages().some((s) => s.id === key.stage)) key.stage = (activeStages()[0] || { id: key.stage }).id;
         lastAutoKey = key ? { ...key } : null;
       }
       if (key && st.override) key.stage = st.override;
@@ -479,7 +511,8 @@ async function tick() {
 /* ---------------- IPC ---------------- */
 
 function setupIpc() {
-  ipcMain.handle("state:get", () => ({ state: store.state, live, platform: process.platform, openAtLogin: app.getLoginItemSettings().openAtLogin, vibrancy: hasVibrancy, hotkeyLabel: HOTKEY_LABEL, hotkeyFailed: hotkeyResult.failed }));
+  ipcMain.handle("professions:set", (_e, list) => setProfessions(list));
+  ipcMain.handle("state:get", () => ({ catalog: Prof.catalog(), state: store.state, live, platform: process.platform, openAtLogin: app.getLoginItemSettings().openAtLogin, vibrancy: hasVibrancy, hotkeyLabel: HOTKEY_LABEL, hotkeyFailed: hotkeyResult.failed }));
   ipcMain.handle("mini:resize", (_e, h) => {
     if (!mini || mini.isDestroyed()) return;
     const height = Math.max(60, Math.min(400, Math.round(h)));

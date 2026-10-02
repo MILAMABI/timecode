@@ -1,5 +1,17 @@
 # Рабочий таймкод
 
+Трекер времени для креативщиков: видео, фото, дизайн, моушн и 3D, звук. При первом запуске спрашивает, чем ты занимаешься, и подстраивает этапы и программы. Направлений можно выбрать несколько.
+
+| Направление | Программы | Этапы |
+|---|---|---|
+| Видео | Premiere, Resolve, Final Cut, Media Composer, CapCut, After Effects, Audition, Nuke | Монтаж, Цветкор, Саунд-дизайн, VFX, Рендер |
+| Фото | Lightroom, Capture One, Photo Mechanic, Bridge, Photoshop, Luminar, DxO, Topaz, Helicon, Evoto, Retouch4me, Affinity | Отбор, Проявка и цвет, Ретушь, Клинап, Экспорт и сдача |
+| Дизайн | Figma, Photoshop, Illustrator, InDesign, Sketch, Affinity, Framer, Canva, Penpot, Bridge | Референсы, Концепт, Макет, Прототип, Подготовка к сдаче |
+| Моушн и 3D | After Effects, Cinema 4D, Blender, Houdini, Unreal, Nuke | Моделинг, Анимация, Свет и материалы, Рендер, Композ |
+| Звук | Logic Pro, Ableton, FL Studio, Pro Tools, Reaper, Cubase, Audition | Запись, Аранжировка, Сведение, Мастеринг |
+
+Ниже — подробности про видео; для остальных направлений всё работает так же: этап берётся по программе, проект — из заголовка окна.
+
 Трекер времени для монтажёра. Сам пишет время, пока на экране Premiere Pro, DaVinci Resolve, After Effects или Audition, и раскладывает его по этапам и проектам.
 
 - **Premiere Pro**: время идёт как «Монтаж», проект берётся из имени файла `.prproj`. Если крутишь цвет или звук, нажми нужный этап в окне или в меню иконки, и время запишется туда.
