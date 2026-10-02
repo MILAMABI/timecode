@@ -9,6 +9,9 @@
 | Дизайн | Figma, Photoshop, Illustrator, InDesign, Sketch, Affinity, Framer, Canva, Penpot, Bridge | Референсы, Концепт, Макет, Прототип, Подготовка к сдаче |
 | Моушн и 3D | After Effects, Cinema 4D, Blender, Houdini, Unreal, Nuke | Моделинг, Анимация, Свет и материалы, Рендер, Композ |
 | Звук | Logic Pro, Ableton, FL Studio, Pro Tools, Reaper, Cubase, Audition | Запись, Аранжировка, Сведение, Мастеринг |
+| 3D-печать | Bambu Studio, OrcaSlicer, PrusaSlicer, Cura, Creality Print, Anycubic, Chitubox, Lychee, Simplify3D, ideaMaker, FlashPrint, ELEGOO SatelLite; Blender, Fusion, Shapr3D, Rhino, Plasticity, FreeCAD, SketchUp, SolidWorks, ZBrush; Meshmixer, Netfabb, MeshLab, 3D Builder | Моделинг, Подготовка модели, Слайсинг, Печать и контроль, Постобработка |
+
+**Своё под себя.** В Настройках можно создать своё направление со своими этапами, добавить любую программу (из списка открытых сейчас или по названию) и поменять этап у встроенной программы.
 
 Ниже — подробности про видео; для остальных направлений всё работает так же: этап берётся по программе, проект — из заголовка окна.
 

@@ -410,6 +410,27 @@ body:not(.vib) .toolbar{background:transparent;backdrop-filter:blur(20px) satura
 .alias svg{width:14px;height:9px;fill:none;stroke:var(--tertiary);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
 .alias button{border:0;background:none;color:var(--tertiary);width:20px;height:20px;border-radius:50%;cursor:default}
 .alias button:hover{background:var(--fill-2);color:var(--fg)}
+.cform{display:flex;flex-direction:column;gap:10px;padding:0 14px 14px}
+.cform label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--secondary)}
+.cform select{background:var(--fill);border:0;border-radius:999px;padding:7px 14px;color:var(--fg)}
+.cform .pill{align-self:flex-start}
+.running{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.runchips{display:inline-flex;flex-wrap:wrap;gap:6px}
+.runchips button{border:0;border-radius:999px;padding:4px 11px;font-size:12px;background:var(--fill);color:var(--fg);cursor:default}
+.runchips button:hover{background:var(--fill-2)}
+.runchips button.added{opacity:.45}
+.arow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 14px;min-height:42px}
+.arow + .arow,.arow + details,details + .arow{border-top:.5px solid var(--separator)}
+.arow .an{min-width:0;display:flex;flex-direction:column}
+.arow .an small{color:var(--secondary);font-size:11px}
+.arow select{background:var(--fill);border:0;border-radius:999px;padding:5px 12px;color:var(--fg);max-width:190px}
+.arow select.changed{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.arow .x{border:0;background:none;color:var(--tertiary);width:24px;height:24px;border-radius:50%;cursor:default}
+.arow .x:hover{background:var(--fill-2);color:var(--fg)}
+.badge-own{font-size:10px;padding:1px 7px;border-radius:999px;background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent);margin-left:6px;font-weight:600}
+details.builtin summary{padding:10px 14px;font-size:12.5px;color:var(--secondary);cursor:default;list-style:none}
+details.builtin summary::-webkit-details-marker{display:none}
+details.builtin[open] summary{border-bottom:.5px solid var(--separator)}
 .prow .pdot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none;margin-right:2px}
 
 @media (max-width:720px){
@@ -536,7 +557,28 @@ body:not(.vib) .toolbar{background:transparent;backdrop-filter:blur(20px) satura
 
       <h2 class="section-title">Направления</h2>
       <div class="group" id="profList"></div>
+      <details class="group manual" id="newProf">
+        <summary>Своё направление</summary>
+        <form class="cform" id="newProfForm">
+          <label>Название<input class="field" id="npName" maxlength="40" placeholder="Например, Копирайтинг" autocomplete="off"></label>
+          <label>Этапы — через запятую<input class="field" id="npStages" maxlength="300" placeholder="Сбор материала, Черновик, Редактура, Правки клиента" autocomplete="off"></label>
+          <button class="pill primary" type="submit">Создать направление</button>
+        </form>
+      </details>
       <p class="foot">Трекер следит за программами выбранных направлений. Если выключить направление, его этапы и статистика останутся — лишние этапы можно убрать выше.</p>
+
+      <h2 class="section-title">Программы</h2>
+      <div class="group" id="appList"></div>
+      <details class="group manual" id="newApp">
+        <summary>Добавить программу</summary>
+        <form class="cform" id="newAppForm">
+          <div class="running"><span class="pmeta">Открытые сейчас:</span><span id="runningApps" class="runchips"><span class="pmeta">загружаю…</span></span><button type="button" class="ghost" id="refreshApps">Обновить</button></div>
+          <label>Программа<input class="field" id="naName" maxlength="60" placeholder="Название, как в Доке или Диспетчере задач" autocomplete="off"></label>
+          <label>Писать время в этап<select id="naStage"></select></label>
+          <button class="pill primary" type="submit">Добавить программу</button>
+        </form>
+      </details>
+      <p class="foot">Свои программы отслеживаются при любых направлениях. Этап встроенной программы можно поменять в списке выше — например, чтобы Photoshop всегда писался в «Клинап».</p>
 
       <h2 class="section-title">Виджет и клавиши</h2>
       <div class="group">

@@ -59,12 +59,56 @@ assert.strictEqual(new Set(st.slice(0, 8).map((s) => s.color)).size, Math.min(8,
 assert.ok(stagesFor(["audio"]).length === 5);
 
 // --- каталог ---
-assert.strictEqual(catalog().length, 5);
+assert.strictEqual(catalog().length, 6);
 for (const p of PROFESSIONS) assert.ok(appsFor([p.id]).length >= 4, `программы для ${p.id}`);
 // каждый этап программы существует в своей профессии
 for (const a of APPS) for (const pid of a.for) {
   const stage = typeof a.stage === "string" ? a.stage : a.stage[pid];
   assert.ok(PROFESSIONS.find((p) => p.id === pid).stages.some((s) => s.id === stage), `${a.label}: этап ${stage} в ${pid}`);
 }
+
+// --- 3D-печать ---
+const PR = ["print3d"];
+assert.deepStrictEqual(c("BambuStudio", "Кронштейн v3.3mf - Bambu Studio", PR), { stage: "slice", project: "Кронштейн v3", app: "Bambu Studio" });
+assert.strictEqual(c("Bambu Studio", "Untitled - Bambu Studio", PR).project, "Untitled");
+assert.strictEqual(c("OrcaSlicer", "Box.3mf - OrcaSlicer 2.3", PR).project, "Box");
+assert.strictEqual(c("PrusaSlicer", "", PR).stage, "slice");
+assert.strictEqual(c("UltiMaker-Cura", "", PR).app, "UltiMaker Cura");
+assert.strictEqual(c("CHITUBOX Basic", "mini.ctb", PR).project, "mini");
+assert.strictEqual(c("Lychee Slicer", "", PR).stage, "slice");
+assert.deepStrictEqual(c("Blender", "/x/miniature.blend - Blender 4.4", PR), { stage: "model", project: "miniature", app: "Blender" });
+assert.strictEqual(c("Autodesk Fusion", "Корпус v12 - Autodesk Fusion", PR).project, "Корпус v12");
+assert.strictEqual(c("Fusion360", "", PR).app, "Fusion");
+assert.strictEqual(c("Shapr3D", "Mount — Shapr3D", PR).project, "Mount");
+assert.strictEqual(c("Meshmixer", "fixed.stl", PR).stage, "meshprep");
+assert.strictEqual(c("SketchUp 2026", "house.skp", PR).app, "SketchUp");
+// SketchUp не путается со Sketch даже при включённом дизайне
+assert.strictEqual(c("SketchUp 2026", "house.skp", ["design", "print3d"]).app, "SketchUp");
+assert.strictEqual(c("SketchUp 2026", "house.skp", ["design"]), null);
+assert.strictEqual(c("Sketch", "App.sketch", ["design", "print3d"]).app, "Sketch");
+// слайсер не ловится, если 3D-печать не выбрана
+assert.strictEqual(c("BambuStudio", "", ["video"]), null);
+// Blender в моушне и печати — один и тот же этап «Моделинг»
+assert.strictEqual(c("Blender", "", ["motion", "print3d"]).stage, "model");
+assert.ok(stagesFor(["print3d"]).some((x) => x.id === "slice"));
+assert.strictEqual(stagesFor(["motion", "print3d"]).filter((x) => x.id === "model").length, 1);
+
+// --- свои программы, направления, переназначение ---
+const custom = {
+  apps: [{ id: "a1", label: "Notion", needle: "notion", stage: "c-texts" }, { id: "a2", label: "Cursor", needle: "cursor", stage: "c-code" }],
+  professions: [{ id: "custom-copy", name: "Копирайтинг", stages: [{ id: "c-texts", name: "Тексты", color: "c1" }, { id: "c-edit", name: "Редактура", color: "c2" }] }],
+  overrides: { Photoshop: "cleanup" },
+};
+const cc = (appName, title, professions) => classify({ appName, title, memory: {}, professions, custom });
+assert.deepStrictEqual(cc("Notion", "Сценарий ролика — Notion", ["video"]), { stage: "c-texts", project: "Сценарий ролика", app: "Notion" });
+assert.strictEqual(cc("Cursor", "main.js — playhead — Cursor", ["video"]).stage, "c-code");
+// своя программа отслеживается при любых направлениях
+assert.ok(cc("Notion", "", ["audio"]));
+// переназначение встроенной программы
+assert.strictEqual(cc("Adobe Photoshop 2026", "a.psd", ["photo"]).stage, "cleanup");
+assert.strictEqual(c("Adobe Photoshop 2026", "a.psd", ["photo"]).stage, "retouch");
+// своё направление попадает в каталог и даёт свои этапы
+assert.ok(catalog(custom).some((p) => p.id === "custom-copy" && p.custom));
+assert.deepStrictEqual(stagesFor(["custom-copy"], custom).map((x) => x.id), ["c-texts", "c-edit"]);
 
 console.log("professions: все проверки пройдены");

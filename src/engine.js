@@ -21,10 +21,11 @@ function premiereProject(title) {
   return m ? m[1].trim() : "";
 }
 
-function matchApp(appName, professions) {
+function matchApp(appName, professions, custom) {
   const low = String(appName || "").toLowerCase();
   if (!low) return null;
-  return appsFor(professions).find((a) => a.needles.some((n) => low.includes(n))) || null;
+  return appsFor(professions, custom).find((a) =>
+    a.needles.some((n) => n && low.includes(n)) && !(a.exclude || []).some((x) => low.includes(x))) || null;
 }
 
 /**
@@ -34,13 +35,13 @@ function matchApp(appName, professions) {
  * override: этап, выбранный вручную (перекрывает автоматический).
  * memory: объект, где помним последний известный проект для каждой программы.
  */
-function classify({ appName, title, resolveInfo, override, memory, professions }) {
-  const app = matchApp(appName, professions);
+function classify({ appName, title, resolveInfo, override, memory, professions, custom }) {
+  const app = matchApp(appName, professions, custom);
   if (!app) return null;
-  let stage = stageFor(app, professions);
+  let stage = stageFor(app, professions, custom);
   let project = "";
   if (app.resolve) {
-    if (resolveInfo && resolveInfo.page) stage = RESOLVE_PAGES[resolveInfo.page.toLowerCase()] || "edit";
+    if (resolveInfo && resolveInfo.page && !(custom && custom.overrides && custom.overrides[app.label])) stage = RESOLVE_PAGES[resolveInfo.page.toLowerCase()] || "edit";
     project = (resolveInfo && resolveInfo.project) || "";
   } else if (app.project) {
     try { project = app.project(title) || ""; } catch { project = ""; }

@@ -167,16 +167,20 @@ function renderClips(){
   }).join("");
 }
 let catalog=[];
-const PROF_COLOR={video:"var(--c1)",photo:"var(--c2)",design:"var(--c4)",motion:"var(--c7)",audio:"var(--c3)"};
+const PROF_COLOR={video:"var(--c1)",photo:"var(--c2)",design:"var(--c4)",motion:"var(--c7)",audio:"var(--c3)",print3d:"var(--c6)"};
+const profColor=id=>PROF_COLOR[id]||"var(--c5)";
 const PROF_ICON={
   video:'<svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="M16 10.5l5-3v9l-5-3"/></svg>',
   photo:'<svg viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6H8l1.5-2h5L16 6h1.5A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.5"/></svg>',
   design:'<svg viewBox="0 0 24 24"><path d="M12 3l7 7-4 9H9l-4-9z"/><circle cx="12" cy="11" r="1.6"/><path d="M12 3v6.4M9 19h6"/></svg>',
   motion:'<svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>',
-  audio:'<svg viewBox="0 0 24 24"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4"/></svg>'
+  audio:'<svg viewBox="0 0 24 24"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4"/></svg>',
+  print3d:'<svg viewBox="0 0 24 24"><path d="M4 4h16v4H4z"/><path d="M12 8v4"/><path d="M9 12h6l-1 2h-4z"/><path d="M6 20h12M8 20l1-3h6l1 3"/></svg>'
 };
 const myProfs=()=>settings.professions&&settings.professions.length?settings.professions:["video"];
-function trackedApps(){const set=[];catalog.filter(p=>myProfs().includes(p.id)).forEach(p=>p.apps.forEach(a=>{if(!set.includes(a))set.push(a)}));return set}
+// встроенные направления + свои
+const fullCatalog=()=>catalog.filter(p=>!p.custom).concat((settings.customProfessions||[]).map(p=>({...p,custom:true,desc:"Своё направление",apps:[]})));
+function trackedApps(){const set=(settings.customApps||[]).map(a=>a.label);fullCatalog().filter(p=>myProfs().includes(p.id)).forEach(p=>p.apps.forEach(a=>{if(!set.includes(a))set.push(a)}));return set}
 function appsLine(list,max=4){return list.length>max?`${list.slice(0,max).join(", ")} и ещё ${list.length-max}`:list.join(", ")}
 function renderStatus(){
   const run=running();
@@ -562,8 +566,9 @@ $("exportBtn").addEventListener("click",async()=>{const r=await api.exportCSV();
 
 period=lsGet(LSP,"week");tab=lsGet(LST,"timer");if(!VIEWS[tab])tab="timer";
 document.querySelectorAll("#period button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.p===period));
-api.getState().then(r=>{
+api.getState().then(async r=>{
   platform=r.platform;live=r.live||{};catalog=r.catalog||[];
+  try{appTable=await api.appTable()}catch{appTable=[]}
   $("aboutVer").textContent=`Версия ${r.appVersion||""} · трекер времени для креативщиков`;
   document.body.classList.add(platform==="darwin"?"mac":platform==="win32"?"win":"other");
   if(r.vibrancy)document.body.classList.add("vib");
@@ -602,10 +607,65 @@ $("obGrid").addEventListener("click",e=>{const b=e.target.closest("[data-prof]")
 $("obGo").addEventListener("click",async()=>{if(!obSel.length)return;await api.setProfessions(obSel);tab="timer";lsSet(LST,tab);toast("Готово — трекер настроен под твою работу")});
 function renderProfSettings(){
   if(!catalog.length)return;
-  $("profList").innerHTML=catalog.map(p=>{const on=myProfs().includes(p.id)&&!!(settings.professions&&settings.professions.length);
-    return `<div class="row prow" style="--c:${PROF_COLOR[p.id]}"><span class="pdot"></span><span class="rl">${esc(p.name)}<small class="prow-apps">${esc(appsLine(p.apps,6))}</small></span>
-    <label class="switch" for="prof-${p.id}"><input type="checkbox" id="prof-${p.id}" data-prof="${p.id}" role="switch" ${on?"checked":""}><span class="knob" aria-hidden="true"></span></label></div>`}).join("");
+  if($("profList").contains(document.activeElement)&&document.activeElement.tagName==="SELECT")return;
+  $("profList").innerHTML=fullCatalog().map(p=>{const on=myProfs().includes(p.id)&&!!(settings.professions&&settings.professions.length);
+    const sub=p.custom?`Своё · ${p.stages.map(s=>s.name).join(", ")}`:appsLine(p.apps,6);
+    return `<div class="row prow" style="--c:${profColor(p.id)}"><span class="pdot"></span><span class="rl">${esc(p.name)}<small class="prow-apps">${esc(sub)}</small></span>
+    <span class="bbtns">${p.custom?`<button type="button" class="ghost" data-delprof="${esc(p.id)}">Удалить</button>`:""}
+    <label class="switch" for="prof-${p.id}"><input type="checkbox" id="prof-${p.id}" data-prof="${p.id}" role="switch" ${on?"checked":""}><span class="knob" aria-hidden="true"></span></label></span></div>`}).join("");
+  renderAppSettings();
 }
+/* ---------- программы ---------- */
+let appTable=[],runningList=null;
+function stageSelect(cur,attrs,withDefault){
+  const list=active().slice();if(cur&&!list.some(s=>s.id===cur)){const s=stages.find(x=>x.id===cur);if(s)list.push(s)}
+  return `<select ${attrs}>${withDefault?`<option value="">${esc(withDefault)}</option>`:""}${list.map(s=>`<option value="${esc(s.id)}" ${s.id===cur?"selected":""}>${esc(s.name)}</option>`).join("")}</select>`;
+}
+function renderAppSettings(){
+  const box=$("appList");if(box.contains(document.activeElement)&&document.activeElement.tagName==="SELECT")return;
+  const ov=settings.stageOverrides||{},own=settings.customApps||[],profs=myProfs();
+  const builtIn=appTable.filter(a=>a.for.some(f=>profs.includes(f)));
+  const defStage=a=>{for(const p of profs)if(a.stage[p])return a.stage[p];return Object.values(a.stage)[0]};
+  const nameOf=id=>(stages.find(s=>s.id===id)||{name:"—"}).name;
+  let html=own.map(a=>`<div class="arow"><span class="an">${esc(a.label)}<small>своя программа</small></span>${stageSelect(a.stage,`data-ownapp="${esc(a.id)}" aria-label="Этап для ${esc(a.label)}"`)}<button type="button" class="x" data-delapp="${esc(a.id)}" aria-label="Убрать ${esc(a.label)}" title="Убрать">×</button></div>`).join("");
+  if(builtIn.length)html+=`<details class="builtin" ${own.length?"":"open"}><summary>Встроенные программы выбранных направлений · ${builtIn.length}</summary>${builtIn.map(a=>{const o=ov[a.label];
+    return `<div class="arow"><span class="an">${esc(a.label)}<small>${o?"этап изменён":"по умолчанию: "+esc(nameOf(defStage(a)))}</small></span>${stageSelect(o||"",`class="${o?"changed":""}" data-ovr="${esc(a.label)}" aria-label="Этап для ${esc(a.label)}"`,"По умолчанию")}<span></span></div>`}).join("")}</details>`;
+  const wasOpen=box.querySelector("details.builtin")?.open;
+  box.innerHTML=html||`<div class="row"><span class="rl"><small>Пока нет программ. Добавь свою ниже.</small></span></div>`;
+  if(wasOpen!==undefined){const d=box.querySelector("details.builtin");if(d)d.open=wasOpen}
+  $("naStage").innerHTML=active().map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");
+}
+async function loadRunning(){
+  $("runningApps").innerHTML=`<span class="pmeta">загружаю…</span>`;
+  try{runningList=await api.runningApps()}catch{runningList=[]}
+  const have=new Set(trackedApps().map(x=>x.toLowerCase()));
+  $("runningApps").innerHTML=runningList.length?runningList.map(n=>`<button type="button" data-pick="${esc(n)}" class="${have.has(n.toLowerCase())?"added":""}" title="${have.has(n.toLowerCase())?"Уже отслеживается":"Выбрать"}">${esc(n)}</button>`).join(""):`<span class="pmeta">не удалось получить список — впиши название вручную</span>`;
+}
+$("newApp").addEventListener("toggle",()=>{if($("newApp").open)loadRunning()});
+$("refreshApps").addEventListener("click",loadRunning);
+$("runningApps").addEventListener("click",e=>{const b=e.target.closest("[data-pick]");if(!b)return;$("naName").value=b.dataset.pick;$("naStage").focus()});
+$("newAppForm").addEventListener("submit",async e=>{
+  e.preventDefault();const name=$("naName").value.trim(),st=$("naStage").value;
+  if(!name){toast("Впиши или выбери программу");return}
+  const r=await api.addCustomApp(name,st);
+  if(r&&r.ok){toast(`«${name}» отслеживается — время пойдёт в «${stageOf(st).name}»`);$("naName").value="";loadRunning()}else toast("Не получилось добавить программу");
+});
+$("appList").addEventListener("change",e=>{
+  const o=e.target.closest("[data-ovr]");if(o){api.setStageOverride(o.dataset.ovr,o.value||null);toast(o.value?`${o.dataset.ovr} → «${stageOf(o.value).name}»`:`${o.dataset.ovr}: этап по умолчанию`);return}
+  const a=e.target.closest("[data-ownapp]");if(a){const list=(settings.customApps||[]).map(x=>x.id===a.dataset.ownapp?{...x}:x);const it=list.find(x=>x.id===a.dataset.ownapp);if(it){api.addCustomApp(it.label,a.value)}}
+});
+$("appList").addEventListener("click",e=>{const d=e.target.closest("[data-delapp]");if(d){api.removeCustomApp(d.dataset.delapp);toast("Программа больше не отслеживается")}});
+$("newProfForm").addEventListener("submit",async e=>{
+  e.preventDefault();const name=$("npName").value.trim(),st=$("npStages").value.split(/[,\n;]/).map(x=>x.trim()).filter(Boolean);
+  if(!name||!st.length){toast("Нужно название и хотя бы один этап");return}
+  const r=await api.addCustomProfession(name,st);
+  if(r&&r.ok){toast(`Направление «${name}» создано и включено`);$("npName").value="";$("npStages").value="";$("newProf").open=false}
+});
+$("profList").addEventListener("click",e=>{
+  const d=e.target.closest("[data-delprof]");if(!d)return;
+  if(d.dataset.armed){api.removeCustomProfession(d.dataset.delprof);toast("Направление удалено — его этапы и статистика остались")}
+  else{d.dataset.armed="1";d.textContent="Точно удалить?";d.classList.add("armed");setTimeout(()=>{if(d.isConnected){delete d.dataset.armed;d.textContent="Удалить";d.classList.remove("armed")}},3000)}
+});
 $("profList").addEventListener("change",e=>{
   const i=e.target.closest("[data-prof]");if(!i)return;const id=i.dataset.prof;const cur=myProfs();
   let next=i.checked?[...cur.filter(x=>x!==id),id]:cur.filter(x=>x!==id);

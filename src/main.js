@@ -8,6 +8,7 @@ const Focus = require("./focus");
 const Prof = require("./professions");
 const Projects = require("./projects");
 const path = require("path");
+const { execFile } = require("child_process");
 const fs = require("fs");
 const { Engine, classify, toCSV } = require("./engine");
 const { Store } = require("./store");
@@ -374,10 +375,30 @@ function setSettings(patch) {
 
 /* ---------------- профессии ---------------- */
 
+const customCfg = () => {
+  const s = store.state.settings;
+  return { apps: s.customApps || [], professions: s.customProfessions || [], overrides: s.stageOverrides || {} };
+};
+
+/** Добавить этапы в список (без дублей), вернуть новый список. */
+function mergeStages(current, wanted) {
+  const stages = current.map((s) => ({ ...s }));
+  const used = new Set(stages.filter((s) => !s.archived).map((s) => s.color));
+  for (const w of wanted) {
+    const ex = stages.find((s) => s.id === w.id);
+    if (ex) { if (ex.archived) ex.archived = false; continue; }
+    const color = used.has(w.color) ? (["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"].find((c) => !used.has(c)) || w.color) : w.color;
+    used.add(color);
+    stages.push({ ...w, color });
+  }
+  return stages;
+}
+
 function setProfessions(list) {
-  const ids = (Array.isArray(list) ? list : []).filter((id) => Prof.PROFESSIONS.some((p) => p.id === id));
+  const all = Prof.allProfessions(customCfg());
+  const ids = (Array.isArray(list) ? list : []).filter((id) => all.some((p) => p.id === id));
   if (!ids.length) return;
-  const wanted = Prof.stagesFor(ids);
+  const wanted = Prof.stagesFor(ids, customCfg());
   const st = store.state;
   const pristine = !st.settings.professions && st.sessions.length === 0;
   let stages;
@@ -385,20 +406,88 @@ function setProfessions(list) {
     stages = wanted; // новый пользователь — сразу набор под его профессии
   } else {
     // уже есть данные — ничего не убираем, только добавляем недостающие этапы
-    stages = st.stages.map((s) => ({ ...s }));
-    const used = new Set(stages.filter((s) => !s.archived).map((s) => s.color));
-    for (const w of wanted) {
-      const ex = stages.find((s) => s.id === w.id);
-      if (ex) { if (ex.archived) ex.archived = false; continue; }
-      const color = used.has(w.color) ? (["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"].find((c) => !used.has(c)) || w.color) : w.color;
-      used.add(color);
-      stages.push({ ...w, color });
-    }
+    stages = mergeStages(st.stages, wanted);
   }
   store.state.stages = stages;
   store.state.settings = { ...st.settings, professions: ids };
   store.changed();
   updateTray();
+}
+
+/* ---------------- свои программы и направления ---------------- */
+
+const newId = (p) => p + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+function saveSettings(patch) {
+  store.state.settings = { ...store.state.settings, ...patch };
+  store.changed();
+  updateTray();
+}
+
+/** Своё направление: название + этапы. Сразу включается. */
+function addCustomProfession(name, stageNames) {
+  name = String(name || "").trim().slice(0, 40);
+  const names = (Array.isArray(stageNames) ? stageNames : []).map((n) => String(n).trim().slice(0, 30)).filter(Boolean);
+  if (!name || !names.length) return { ok: false };
+  const id = newId("custom");
+  const palette = ["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"];
+  const existing = store.state.stages;
+  const stages = names.map((n, i) => {
+    // этап с таким же названием уже есть — используем его, чтобы статистика не дробилась
+    const same = existing.find((s) => s.name.toLowerCase() === n.toLowerCase());
+    return same ? { id: same.id, name: same.name, color: same.color } : { id: newId("st"), name: n, color: palette[i % palette.length] };
+  });
+  const prof = { id, name, desc: "Своё направление", stages };
+  saveSettings({ customProfessions: [...(store.state.settings.customProfessions || []), prof] });
+  setProfessions([...(store.state.settings.professions || []), id]);
+  return { ok: true, id };
+}
+
+function removeCustomProfession(id) {
+  const s = store.state.settings;
+  saveSettings({
+    customProfessions: (s.customProfessions || []).filter((p) => p.id !== id),
+    professions: (s.professions || []).filter((p) => p !== id),
+  });
+}
+
+/** Своя программа: имя процесса + этап. Отслеживается всегда, при любых направлениях. */
+function addCustomApp(label, stage) {
+  label = String(label || "").trim().slice(0, 60);
+  if (!label || !store.state.stages.some((s) => s.id === stage)) return { ok: false };
+  const apps = (store.state.settings.customApps || []).filter((a) => a.label.toLowerCase() !== label.toLowerCase());
+  apps.push({ id: newId("app"), label, needle: label.toLowerCase(), stage });
+  saveSettings({ customApps: apps });
+  return { ok: true };
+}
+
+function setStageOverride(label, stage) {
+  const ov = { ...(store.state.settings.stageOverrides || {}) };
+  if (stage) ov[label] = stage; else delete ov[label];
+  saveSettings({ stageOverrides: ov });
+}
+
+/** Какие программы с окнами сейчас открыты — чтобы выбрать из списка, а не вспоминать имя процесса. */
+function listRunningApps() {
+  return new Promise((resolve) => {
+    const done = (names) => {
+      const clean = [...new Set(names.map((n) => String(n).trim()).filter((n) => n && !/^(playhead|timecode|electron|finder|explorer|systemsettings|system settings|dock|loginwindow|applicationframehost|textinputhost|searchhost|shellexperiencehost)$/i.test(n)))];
+      resolve(clean.sort((a, b) => a.localeCompare(b)));
+    };
+    if (isMac) {
+      execFile("osascript", ["-e", 'tell application "System Events" to get name of every application process whose background only is false'], { timeout: 5000 }, (err, out) => {
+        if (!err) return done(String(out).split(",").map((x) => x.trim()));
+        execFile("lsappinfo", ["list"], { timeout: 5000 }, (e2, o2) => {
+          const names = [...String(o2 || "").matchAll(/"([^"]+)"\s+ASN:/g)].map((m) => m[1]);
+          done(names);
+        });
+      });
+    } else if (process.platform === "win32") {
+      execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+        "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Process | Where-Object { $_.MainWindowTitle } | Select-Object -ExpandProperty ProcessName -Unique"],
+        { timeout: 8000, windowsHide: true }, (err, out) => done(err ? [] : String(out).split(/\r?\n/)));
+    } else done([]);
+  });
 }
 
 /* ---------------- пауза, перерывы, фокус ---------------- */
@@ -559,7 +648,7 @@ async function tick() {
         // кликнул в наше окно — продолжаем то, что было в монтажке
         key = lastAutoKey ? { ...lastAutoKey } : null;
       } else {
-        key = classify({ appName: fw.app, title: fw.title, resolveInfo, override: null, memory, professions: st.settings.professions });
+        key = classify({ appName: fw.app, title: fw.title, resolveInfo, override: null, memory, professions: st.settings.professions, custom: customCfg() });
         // этап программы мог быть убран пользователем — тогда пишем в первый активный
         if (key && !activeStages().some((s) => s.id === key.stage)) key.stage = (activeStages()[0] || { id: key.stage }).id;
         lastAutoKey = key ? { ...key } : null;
@@ -607,6 +696,13 @@ async function tick() {
 
 function setupIpc() {
   ipcMain.handle("professions:set", (_e, list) => setProfessions(list));
+  ipcMain.handle("custom:addProfession", (_e, name, stages) => addCustomProfession(name, stages));
+  ipcMain.handle("custom:removeProfession", (_e, id) => removeCustomProfession(id));
+  ipcMain.handle("custom:addApp", (_e, label, stage) => addCustomApp(label, stage));
+  ipcMain.handle("custom:removeApp", (_e, id) => saveSettings({ customApps: (store.state.settings.customApps || []).filter((a) => a.id !== id) }));
+  ipcMain.handle("custom:setOverride", (_e, label, stage) => setStageOverride(label, stage));
+  ipcMain.handle("apps:running", () => listRunningApps());
+  ipcMain.handle("apps:table", () => Prof.appTable());
   ipcMain.handle("projects:rename", (_e, fromKey, toName) => {
     const r = Projects.renameProject(store.state.sessions, store.state.projectAliases, fromKey, toName);
     if (!r.changed) return { changed: 0 };
