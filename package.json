@@ -1,7 +1,7 @@
 {
   "name": "timecode-tracker",
   "productName": "Timecode",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Рабочий таймкод — трекер времени для монтажёра: монтаж, цветкор, саунд-дизайн, VFX. Автоматически пишет время в Premiere Pro и DaVinci Resolve.",
   "main": "src/main.js",
   "author": "Миша",

@@ -8,6 +8,10 @@ const { FrontWindow, ResolveHelper, resolveHelperPath } = require("./watchers");
 const POLL_MS = 2000;
 const OVERRIDE_RESET_MS = 30 * 60_000; // ручной этап сбрасывается, если 30 минут не было работы
 const isMac = process.platform === "darwin";
+const os = require("os");
+// Windows 11 (сборка 22000+) умеет системное стекло Mica.
+const isWin11 = process.platform === "win32" && Number((os.release().split(".")[2]) || 0) >= 22000;
+const hasVibrancy = isMac || isWin11;
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -32,13 +36,17 @@ let live = { tracking: false, app: "", stage: null, project: "", last: null, ses
 
 function createWindow(show = true) {
   win = new BrowserWindow({
-    width: 980,
-    height: 860,
-    minWidth: 420,
-    minHeight: 500,
+    width: 1040,
+    height: 760,
+    minWidth: 560,
+    minHeight: 520,
     show,
     title: "Рабочий таймкод",
-    backgroundColor: "#111317",
+    ...(isMac
+      ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 18, y: 18 }, vibrancy: "sidebar", visualEffectState: "followWindow", backgroundColor: "#00000000" }
+      : isWin11
+        ? { backgroundMaterial: "mica", backgroundColor: "#00000000" }
+        : { backgroundColor: "#1c1c1e" }),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -90,7 +98,7 @@ function createMini() {
     height: 96,
     x, y,
     frame: false,
-    transparent: true,
+    ...(isMac ? { vibrancy: "hud", visualEffectState: "active", backgroundColor: "#00000000", roundedCorners: true } : { transparent: true }),
     resizable: false,
     maximizable: false,
     minimizable: false,
@@ -362,7 +370,7 @@ async function tick() {
 /* ---------------- IPC ---------------- */
 
 function setupIpc() {
-  ipcMain.handle("state:get", () => ({ state: store.state, live, platform: process.platform, openAtLogin: app.getLoginItemSettings().openAtLogin, hotkeyLabel: HOTKEY_LABEL, hotkeyFailed: hotkeyResult.failed }));
+  ipcMain.handle("state:get", () => ({ state: store.state, live, platform: process.platform, openAtLogin: app.getLoginItemSettings().openAtLogin, vibrancy: hasVibrancy, hotkeyLabel: HOTKEY_LABEL, hotkeyFailed: hotkeyResult.failed }));
   ipcMain.handle("mini:resize", (_e, h) => {
     if (!mini || mini.isDestroyed()) return;
     const height = Math.max(60, Math.min(400, Math.round(h)));

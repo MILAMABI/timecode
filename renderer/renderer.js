@@ -11,7 +11,8 @@ const DEFAULT_STAGES=[
 const SUGGEST=["Разбор материала","Моушн-дизайн","Субтитры","Экспорт и доставка","Созвоны с клиентом","Сценарий и раскадровка","Синхрон звука"];
 const MAX_ACTIVE=12;
 const LST="rt-tab";
-let tab="stages", projFilter=null;
+let tab="timer", projFilter=null;
+const VIEWS={timer:"Таймер",stats:"Статистика",projects:"Проекты",sessions:"Сессии",settings:"Настройки"};
 const FPS=25, LS="rt-sessions-v1", LSS="rt-stages-v1", LSP="rt-period", LSPRJ="rt-project";
 let sessions=[], stages=DEFAULT_STAGES.map(s=>({...s})), period="week", settings={auto:true,idleMinutes:5}, override=null, live={}, platform="darwin";
 const $=id=>document.getElementById(id);
@@ -152,7 +153,7 @@ function renderClips(){
     const t=sessions.filter(s=>s.cat===c.id&&s.start>=today).reduce((a,s)=>a+dur(s),0);
     const on=run&&run.cat===c.id,ovr=settings.auto&&override===c.id;
     return `<button class="clip" style="--c:${cvar(c)}" data-cat="${c.id}" aria-pressed="${!!on}">
-      ${i<9?`<kbd>${i+1}</kbd>`:""}${ovr?`<span class="ovr">выбран вручную</span>`:""}<span class="name">${esc(c.name)}</span>
+      ${i<9?`<kbd>${i+1}</kbd>`:""}${ovr?`<span class="ovr">вручную</span>`:""}<span class="name">${esc(c.name)}</span>
       <span class="meta num">${on?"идёт · ":""}сегодня ${fmtHM(t)}</span></button>`;
   }).join("");
 }
@@ -166,10 +167,10 @@ function renderStatus(){
   else text="Таймер стоит";
   $("statusText").textContent=text;
   $("autoToggle").checked=!!settings.auto;
-  $("autoInfo").textContent=settings.auto?`Время пишется само, когда на экране ${APPS_TEXT}.`:"Выключен: запускай таймер вручную кнопками этапов.";
+  $("autoInfo").textContent=settings.auto?"Пишет время, пока открыт Premiere, Resolve, After Effects или Audition":"Запускай таймер кнопками этапов";
   $("hint").textContent=settings.auto
-    ?"Этап определяется сам. Если в Premiere крутишь цвет или звук — нажми нужный этап, он запишется вместо «Монтажа». Нажми ещё раз, чтобы вернуть авто. Клавиши 1–9."
-    :"Нажми этап, чтобы запустить. Другой этап — переключение, тот же — стоп. Клавиши 1–9, пробел останавливает.";
+    ?"Этап определяется сам. Нажми другой, если в Premiere занялся цветом или звуком."
+    :"Нажми этап, чтобы запустить. Тот же этап — стоп.";
   $("accessBanner").hidden=!(settings.auto&&live.needsAccess);
   const ob=settings.auto&&override;
   $("overrideBanner").hidden=!ob;
@@ -197,7 +198,7 @@ function renderSummary(){
   const days=new Set(list.map(s=>startOfDay(s.start))).size;
   $("totalSub").textContent=list.length?`${list.length} ${plural(list.length,"сессия","сессии","сессий")} · ${days} ${plural(days,"рабочий день","рабочих дня","рабочих дней")}`:"нет сессий за период";
   $("track").innerHTML=total?shown.filter(c=>by[c.id]>0).map(c=>`<span style="background:${cvar(c)};width:${by[c.id]/total*100}%" title="${esc(c.name)}"></span>`).join(""):"";
-  $("legend").innerHTML=shown.map(c=>{
+  $("legend").innerHTML=shown.filter(c=>!total||by[c.id]>0).map(c=>{
     const v=by[c.id]||0,pct=total?Math.round(v/total*100):0;
     return `<div class="leg" style="--c:${cvar(c)}"><span class="lname">${esc(c.name)}${c.archived?" (убран)":""}</span><span class="lval num">${fmtHM(v)}</span><span class="lpct num">${pct}%</span></div>`;
   }).join("");
@@ -243,7 +244,7 @@ function renderLog(){
     arr.forEach(s=>{
       const c=stageOf(s.cat),live=s.end==null;
       html+=`<div class="entry" style="--c:${cvar(c)}"><span class="bar"></span>
-        <div class="what"><select class="stagesel" data-sess="${s.id}" aria-label="Этап сессии">${stageOptions(s.cat)}</select>${s.source==="auto"?`<span class="tag">авто${s.app?" · "+esc(s.app):""}</span>`:""}<small class="num">${fmtClock(s.start)}–${live?"сейчас":fmtClock(s.end)}${s.project?" · "+esc(s.project):""}</small></div>
+        <div class="what"><select class="stagesel" data-sess="${s.id}" aria-label="Этап сессии">${stageOptions(s.cat)}</select><small class="num">${fmtClock(s.start)}–${live?"сейчас":fmtClock(s.end)}${s.project?" · "+esc(s.project):""}${s.source==="auto"?` · <span class="tag">авто${s.app?", "+esc(s.app):""}</span>`:""}</small></div>
         <span class="dur num ${live?"live":""}" ${live?'data-live="1"':""}>${fmtHM(dur(s))}</span>
         <button class="del ${armed===s.id?"armed":""}" data-del="${s.id}" aria-label="Удалить сессию">${armed===s.id?"Удалить?":"✕"}</button></div>`;
     });
@@ -292,25 +293,34 @@ function renderProjects(){
   }).join("");
 }
 function renderAllTime(){
-  if(!sessions.length){$("alltime").textContent="Здесь будет общее время за всё время работы в трекере";return}
+  if(!sessions.length){$("alltime").textContent="Здесь появится общее время в трекере";return}
   const total=sessions.reduce((a,s)=>a+dur(s),0);
   const projects=new Set(sessions.map(projKey).filter(k=>k!=="__none")).size;
   const first=Math.min(...sessions.map(s=>s.start));
-  const since=new Date(first).toLocaleDateString("ru-RU",{day:"numeric",month:"long",year:new Date(first).getFullYear()===new Date().getFullYear()?undefined:"numeric"});
-  $("alltime").innerHTML=`За всё время в трекере: <b>${fmtHM(total)}</b> · ${sessions.length} ${plural(sessions.length,"сессия","сессии","сессий")} · ${projects} ${plural(projects,"проект","проекта","проектов")} · с ${esc(since)}`;
+  const since=new Date(first).toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:new Date(first).getFullYear()===new Date().getFullYear()?undefined:"numeric"});
+  $("alltime").innerHTML=`Всего в трекере <b>${fmtHM(total)}</b><br>${sessions.length} ${plural(sessions.length,"сессия","сессии","сессий")} · ${projects} ${plural(projects,"проект","проекта","проектов")} · с ${esc(since)}`;
 }
+
 function renderProjList(){
   const seen=new Map();
   sessions.slice().sort((a,b)=>b.start-a.start).forEach(s=>{const k=projKey(s);if(k!=="__none"&&!seen.has(k))seen.set(k,s.project.trim())});
   $("projList").innerHTML=[...seen.values()].slice(0,40).map(n=>`<option value="${esc(n)}"></option>`).join("");
 }
 function renderTabs(){
-  document.querySelectorAll("#tabs button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.t===tab));
-  $("viewStages").hidden=tab!=="stages";$("viewProjects").hidden=tab!=="projects";
+  document.querySelectorAll("#tabs button").forEach(x=>{if(x.dataset.t===tab)x.setAttribute("aria-current","page");else x.removeAttribute("aria-current")});
+  document.querySelectorAll("[data-view]").forEach(v=>v.hidden=v.dataset.view!==tab);
+  $("viewTitle").textContent=VIEWS[tab];
+  $("period").hidden=!["stats","projects","sessions"].includes(tab);
+  renderSideNow();
+}
+function renderSideNow(){
+  const run=running(),show=!!run&&tab!=="timer";
+  $("sideNow").hidden=!show;
+  if(show){$("sideNowL").textContent=stageOf(run.cat).name+(run.project?" · "+run.project:"");const t=Math.floor(dur(run)/1000);$("sideNowV").textContent=`${Math.floor(t/3600)}:${String(Math.floor(t%3600/60)).padStart(2,"0")}:${String(t%60).padStart(2,"0")}`}
 }
 function render(){if(!booted)return;renderStatus();renderClips();renderTabs();renderSummary();renderChart();renderProjects();renderLog();renderEditor();renderManualSelect();renderAllTime();renderProjList();tick()}
 
-function tick(){const run=running();$("tc").innerHTML=fmtTC(run?dur(run):0)}
+function tick(){const run=running();$("tc").innerHTML=fmtTC(run?dur(run):0);renderSideNow()}
 setInterval(()=>{if(running())tick()},1000/FPS);
 setInterval(()=>{if(booted&&running()){renderClips();renderSummary();renderChart();renderProjects();renderAllTime();document.querySelectorAll("[data-live]").forEach(el=>el.textContent=fmtHM(dur(running())))}},5000);
 
@@ -320,11 +330,11 @@ $("period").addEventListener("click",e=>{
   const b=e.target.closest("[data-p]");if(!b)return;period=b.dataset.p;lsSet(LSP,period);
   document.querySelectorAll("#period button").forEach(x=>x.setAttribute("aria-pressed",x===b));render();
 });
-$("tabs").addEventListener("click",e=>{const b=e.target.closest("[data-t]");if(!b)return;tab=b.dataset.t;lsSet(LST,tab);renderTabs()});
+$("tabs").addEventListener("click",e=>{const b=e.target.closest("[data-t]");if(!b)return;tab=b.dataset.t;lsSet(LST,tab);renderTabs();$("content").scrollTop=0});
 $("plist").addEventListener("click",e=>{
   const b=e.target.closest("[data-proj]");if(!b)return;
-  projFilter=projFilter===b.dataset.proj?null:b.dataset.proj;renderProjects();renderLog();
-  if(projFilter)$("log").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});
+  projFilter=b.dataset.proj;renderProjects();renderLog();
+  tab="sessions";lsSet(LST,tab);renderTabs();$("content").scrollTop=0;
 });
 $("log").addEventListener("change",e=>{
   const sel=e.target.closest(".stagesel");if(!sel)return;
@@ -411,14 +421,16 @@ $("loginToggle").addEventListener("change",e=>api.setSettings({openAtLogin:e.tar
 $("idleSel").addEventListener("change",e=>api.setSettings({idleMinutes:+e.target.value}));
 $("miniToggle").addEventListener("change",e=>api.setSettings({mini:e.target.checked}));
 $("hotkeyToggle").addEventListener("change",async e=>{await api.setSettings({hotkeys:e.target.checked});const r=await api.getState();showHotkeyWarn(r)});
-function showHotkeyWarn(r){const f=r.hotkeyFailed||[];$("hotkeyWarn").hidden=!(settings.hotkeys!==false&&f.length);$("hotkeyWarn").textContent=f.length?`Не удалось занять клавиши с цифрами ${f.join(", ")}: их уже использует другая программа.`:""}
+function showHotkeyWarn(r){const f=r.hotkeyFailed||[];$("hotkeyWarn").hidden=!(settings.hotkeys!==false&&f.length);$("hotkeyWarnRow").hidden=$("hotkeyWarn").hidden;$("hotkeyWarn").textContent=f.length?`Не удалось занять клавиши с цифрами ${f.join(", ")}: их уже использует другая программа.`:""}
 $("revealBtn").addEventListener("click",()=>api.revealData());
 $("exportBtn").addEventListener("click",async()=>{const r=await api.exportCSV();if(r&&r.ok)toast(`Сохранено ${r.count} ${plural(r.count,"сессия","сессии","сессий")}`)});
 
-period=lsGet(LSP,"week");tab=lsGet(LST,"stages")==="projects"?"projects":"stages";
+period=lsGet(LSP,"week");tab=lsGet(LST,"timer");if(!VIEWS[tab])tab="timer";
 document.querySelectorAll("#period button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.p===period));
 api.getState().then(r=>{
   platform=r.platform;live=r.live||{};
+  document.body.classList.add(platform==="darwin"?"mac":platform==="win32"?"win":"other");
+  if(r.vibrancy)document.body.classList.add("vib");
   $("trayWord").textContent=platform==="darwin"?"строке меню":"трее (возле часов)";
   $("loginToggle").checked=!!r.openAtLogin;
   $("hotkeyLabel").textContent=r.hotkeyLabel||"";

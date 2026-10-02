@@ -61,11 +61,11 @@ $("hideMini").addEventListener("click", () => api.hideMini());
 // Подгоняем высоту окна под содержимое.
 let lastH = 0;
 new ResizeObserver(() => {
-  const h = Math.ceil($("w").getBoundingClientRect().height) + 12;
+  const h = Math.ceil($("w").getBoundingClientRect().height) + (document.body.classList.contains("vib") ? 0 : 12);
   if (h !== lastH) { lastH = h; api.miniResize(h); }
 }).observe($("w"));
 
-api.getState().then((r) => { state = r.state; live = r.live || {}; render(); });
+api.getState().then((r) => { state = r.state; live = r.live || {}; if (r.platform === "darwin") document.body.classList.add("vib"); render(); });
 api.onState((s) => { state = s; render(); });
 let lastKey = "";
 api.onLive((l) => {
