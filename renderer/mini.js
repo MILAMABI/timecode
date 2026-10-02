@@ -19,13 +19,17 @@ function hms(ms) {
   return `${Math.floor(t / 3600)}:${p(Math.floor((t % 3600) / 60))}:${p(t % 60)}`;
 }
 
+const clock = (t) => new Date(t).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 function renderTop() {
   if (!state) return;
-  const run = running(), auto = state.settings.auto;
-  $("w").className = "w " + (run ? "on" : "off");
-  $("tc").textContent = hms(run ? elapsed(run) : 0);
+  const run = running(), auto = state.settings.auto, p = state.pause;
+  $("w").className = "w " + (p ? "paused" : run ? "on" : "off");
+  $("tc").textContent = p ? hms(p.endsAt ? Math.max(0, p.endsAt - Date.now()) : Date.now() - p.start) : hms(run ? elapsed(run) : 0);
+  $("pauseMini").innerHTML = p ? '<svg viewBox="0 0 10 10"><path d="M2 1v8l7-4z"/></svg>' : '<svg viewBox="0 0 10 10"><rect x="1.5" y="1" width="2.6" height="8" rx=".6"/><rect x="5.9" y="1" width="2.6" height="8" rx=".6"/></svg>';
+  $("pauseMini").title = p ? "Вернуться к работе" : "Пауза";
   let what;
-  if (run) what = `${stageOf(run.cat).name}${run.project ? " · " + run.project : ""}${live.inGrace ? " · отвлёкся" : ""}`;
+  if (p) what = p.endsAt ? `Перерыв до ${clock(p.endsAt)}` : "Пауза";
+  else if (run) what = `${stageOf(run.cat).name}${run.project ? " · " + run.project : ""}${live.inGrace ? " · отвлёкся" : ""}`;
   else if (auto) what = live.idle ? "Пауза — тебя нет" : "Ждёт Premiere / Resolve";
   else what = "Таймер стоит";
   $("what").textContent = what;
@@ -36,6 +40,13 @@ function renderChips() {
   if (!state) return;
   const run = running(), auto = state.settings.auto, ovr = state.override;
   let html = "";
+  if (state.pause) {
+    html = `<button class="chip resume cur" data-act="resume"><i></i>Вернуться к работе</button>` +
+      (state.pause.endsAt ? `<button class="chip" data-act="extend" style="--c:var(--c2)"><i></i>+5 мин</button>` : [5, 10, 15].map((m) => `<button class="chip" data-act="break" data-min="${m}" style="--c:var(--c2)"><i></i>Перерыв ${m} мин</button>`).join(""));
+    $("chips").innerHTML = html;
+    return;
+  }
+  if (state.focus && state.focus.phase === "done") html += `<button class="chip cur" data-act="break" data-min="${state.settings.breakMinutes || 10}" style="--c:var(--c2)"><i></i>Блок готов — перерыв ${state.settings.breakMinutes || 10} мин</button>`;
   if (auto) html += `<button class="chip auto ${!ovr ? "cur" : ""}" data-act="auto" title="Этап определяется сам"><i></i>Авто</button>`;
   active().forEach((s, i) => {
     const cur = run && run.cat === s.id;
@@ -54,7 +65,11 @@ $("chips").addEventListener("click", (e) => {
   if (b.dataset.cat) api.toggleTimer(b.dataset.cat, state.project || "");
   else if (b.dataset.act === "auto") api.setOverride(null);
   else if (b.dataset.act === "stop") api.stopTimer();
+  else if (b.dataset.act === "resume") api.resume();
+  else if (b.dataset.act === "extend") api.extendPause(5);
+  else if (b.dataset.act === "break") api.startPause(+b.dataset.min);
 });
+$("pauseMini").addEventListener("click", () => (state && state.pause ? api.resume() : api.startPause(null)));
 $("openMain").addEventListener("click", () => api.openMain());
 $("hideMini").addEventListener("click", () => api.hideMini());
 
@@ -70,7 +85,7 @@ api.onState((s) => { state = s; render(); });
 let lastKey = "";
 api.onLive((l) => {
   live = l || {};
-  const k = [live.sessionId, live.tracking, live.idle, live.inGrace].join("|");
+  const k = [live.sessionId, live.tracking, live.idle, live.inGrace, live.paused].join("|");
   if (k !== lastKey) { lastKey = k; render(); } else renderTop();
 });
 setInterval(renderTop, 500);

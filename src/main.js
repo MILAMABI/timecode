@@ -1,4 +1,5 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, powerMonitor, dialog, shell, systemPreferences, globalShortcut, screen } = require("electron");
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, powerMonitor, dialog, shell, systemPreferences, globalShortcut, screen, Notification } = require("electron");
+const Focus = require("./focus");
 const path = require("path");
 const fs = require("fs");
 const { Engine, classify, toCSV } = require("./engine");
@@ -148,6 +149,7 @@ function registerHotkeys() {
     const ok = globalShortcut.register(HOTKEY_PREFIX + n, () => onHotkey(n));
     if (!ok) failed.push(n);
   }
+  if (!globalShortcut.register(HOTKEY_PREFIX + "P", () => togglePause())) failed.push("P");
   return { ok: failed.length === 0, failed };
 }
 
@@ -191,6 +193,11 @@ const activeStages = () => store.state.stages.filter((s) => !s.archived);
 const manualRunning = () => store.sessions.find((s) => s.end == null && s.source !== "auto");
 
 function currentLine() {
+  const p = store.state.pause;
+  if (p) {
+    const t = p.endsAt ? hms(Math.max(0, p.endsAt - Date.now())) : hms(Date.now() - p.start);
+    return { text: `Перерыв · ${p.endsAt ? "осталось " : ""}${t}`, short: t, stage: "перерыв", paused: true };
+  }
   const auto = store.state.settings.auto;
   if (auto && live.tracking && live.sessionId) {
     const s = store.find(live.sessionId);
@@ -207,7 +214,7 @@ function currentLine() {
 function updateTrayTitle() {
   if (!tray) return;
   const cur = currentLine();
-  if (isMac) tray.setTitle(cur ? ` ${cur.short} · ${cur.stage}` : "", { fontType: "monospacedDigit" });
+  if (isMac) tray.setTitle(cur ? ` ${cur.paused ? "☕ " : ""}${cur.short} · ${cur.stage}` : "", { fontType: "monospacedDigit" });
   tray.setToolTip(cur ? `Рабочий таймкод — ${cur.text}` : "Рабочий таймкод — пауза");
 }
 
@@ -217,8 +224,19 @@ function updateTray() {
   const auto = st.settings.auto;
   const cur = currentLine();
   const items = [];
-  items.push({ label: cur ? `⏺ ${cur.text}` : auto ? "Ждёт Premiere или Resolve" : "Таймер стоит", enabled: false });
+  items.push({ label: cur ? `${cur.paused ? "☕" : "⏺"} ${cur.text}` : auto ? "Ждёт Premiere или Resolve" : "Таймер стоит", enabled: false });
   if (auto && live.tracking && live.project) items.push({ label: `Проект: ${live.project}`, enabled: false });
+  if (st.focus && st.focus.phase === "work") items.push({ label: `Фокус-блок до ${clock(st.focus.endsAt)}`, enabled: false });
+  items.push({ type: "separator" });
+  if (st.pause) {
+    items.push({ label: "Вернуться к работе", click: () => resumeWork() });
+    if (st.pause.endsAt) items.push({ label: "Ещё 5 минут перерыва", click: () => extendPause(5) });
+  } else {
+    items.push({ label: "Пауза", click: () => startPause(null) });
+    items.push({ label: "Перерыв", submenu: [5, 10, 15, 20].map((m) => ({ label: `${m} минут`, click: () => startPause(m) })) });
+  }
+  if (st.focus && st.focus.phase !== "idle") items.push({ label: "Остановить фокус-блок", click: stopFocus });
+  else items.push({ label: "Фокус-блок", submenu: [25, 50, 90].map((m) => ({ label: `${m} минут`, click: () => startFocus(m) })) });
   items.push({ type: "separator" });
   if (auto) {
     items.push({ label: "Этап", enabled: false });
@@ -265,7 +283,90 @@ function setSettings(patch) {
   updateTray();
 }
 
+/* ---------------- пауза, перерывы, фокус ---------------- */
+
+const clock = (t) => new Date(t).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+
+function notify(title, body) {
+  try {
+    if (!Notification.isSupported()) return;
+    const n = new Notification({ title, body, silent: false });
+    n.on("click", showWindow);
+    n.show();
+  } catch {}
+}
+
+function applyFocusState(next) {
+  for (const k of ["focus", "pause", "breaks"]) if (next[k] !== store.state[k]) store.state[k] = next[k];
+  store.changed();
+}
+
+function startPause(minutes) {
+  const now = Date.now();
+  const run = manualRunning();
+  if (!store.state.pause) {
+    if (run) store.update(run.id, { end: now });
+    if (engine) engine.close();
+  }
+  if (minutes) store.state.settings = { ...store.state.settings, breakMinutes: minutes };
+  applyFocusState(Focus.startPause(store.state, now, minutes || null, run));
+  live = { ...live, tracking: false, sessionId: null, last: null, inGrace: false, paused: true };
+  send("live", live);
+  updateTray();
+}
+
+function resumeWork({ restartManual = true } = {}) {
+  if (!store.state.pause) return;
+  const now = Date.now();
+  const r = Focus.resume(store.state, now);
+  applyFocusState(r.state);
+  if (restartManual && !store.state.settings.auto && r.resumeCat && activeStages().some((s) => s.id === r.resumeCat)) {
+    store.add({ cat: r.resumeCat, start: now, end: null, project: r.resumeProject || "", source: "manual" });
+  }
+  live = { ...live, paused: false };
+  send("live", live);
+  updateTray();
+}
+
+function togglePause() {
+  if (store.state.pause) resumeWork();
+  else startPause(null);
+}
+
+function extendPause(minutes) {
+  applyFocusState(Focus.extendPause(store.state, Date.now(), minutes));
+  updateTray();
+}
+
+function startFocus(minutes) {
+  if (store.state.pause) resumeWork();
+  store.state.settings = { ...store.state.settings, focusMinutes: minutes };
+  applyFocusState(Focus.startFocus(store.state, Date.now(), minutes));
+  updateTray();
+}
+
+function stopFocus() {
+  applyFocusState(Focus.stopFocus(store.state));
+  updateTray();
+}
+
+function checkTimers(now) {
+  for (const ev of Focus.due(store.state, now)) {
+    if (ev === "focusDone") {
+      const m = store.state.focus.minutes;
+      applyFocusState(Focus.markFocusDone(store.state, now));
+      notify("Фокус-блок закончен", `${m} мин работы позади. Самое время передохнуть.`);
+      updateTray();
+    }
+    if (ev === "breakDone") {
+      resumeWork();
+      notify("Перерыв окончен", "Возвращаемся к работе — трекер снова считает время.");
+    }
+  }
+}
+
 function manualToggle(cat, project) {
+  if (store.state.pause) resumeWork({ restartManual: false });
   if (store.state.settings.auto) return setOverride(store.state.override === cat ? null : cat);
   const now = Date.now();
   const run = manualRunning();
@@ -310,9 +411,15 @@ async function tick() {
   ticking = true;
   try {
     const now = Date.now();
+    checkTimers(now);
     const st = store.state;
+    if (st.pause) {
+      if (engine.cur) engine.close();
+      live = { ...live, tracking: false, sessionId: null, last: null, inGrace: false, paused: true };
+      return;
+    }
     if (!st.settings.auto) {
-      live = { ...live, tracking: false, sessionId: null, last: null };
+      live = { ...live, tracking: false, sessionId: null, last: null, paused: false };
       return;
     }
     const idleMs = powerMonitor.getSystemIdleTime() * 1000;
@@ -358,6 +465,7 @@ async function tick() {
       idle: idleMs >= idleLimit,
       frontApp: fw.app,
       inGrace: !!(cur && !key),
+      paused: false,
     };
   } catch (e) {
     console.error(e);
@@ -393,6 +501,11 @@ function setupIpc() {
   ipcMain.handle("timer:toggle", (_e, cat, project) => manualToggle(cat, project));
   ipcMain.handle("timer:stop", () => manualStop());
   ipcMain.handle("override:set", (_e, id) => setOverride(id));
+  ipcMain.handle("focus:start", (_e, m) => startFocus(Math.max(1, Math.min(240, Number(m) || 50))));
+  ipcMain.handle("focus:stop", () => stopFocus());
+  ipcMain.handle("pause:start", (_e, m) => startPause(m ? Math.max(1, Math.min(180, Number(m))) : null));
+  ipcMain.handle("pause:resume", () => resumeWork());
+  ipcMain.handle("pause:extend", (_e, m) => extendPause(Math.max(1, Math.min(60, Number(m) || 5))));
   ipcMain.handle("access:request", () => {
     if (!isMac) return;
     systemPreferences.isTrustedAccessibilityClient(true);

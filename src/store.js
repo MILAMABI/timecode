@@ -7,8 +7,11 @@ const DEFAULTS = {
   version: 1,
   sessions: [],
   stages: DEFAULT_STAGES.map((s) => ({ ...s })),
-  settings: { auto: true, idleMinutes: 5, mini: true, hotkeys: true },
+  settings: { auto: true, idleMinutes: 5, mini: true, hotkeys: true, focusMinutes: 50, breakMinutes: 10 },
   override: null,
+  focus: { phase: "idle" },
+  pause: null,
+  breaks: [],
 };
 
 class Store {

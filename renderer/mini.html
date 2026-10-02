@@ -46,6 +46,13 @@ html,body{margin:0;background:transparent;overflow:hidden;font:12px/1.3 var(--fo
 .chip.auto{--c:#8e8e93}
 .chip.auto.cur{--c:var(--ok)}
 .chip.stop{--c:var(--rec)}
+.chip.resume{--c:var(--ok)}
+.paused .dot{background:var(--c2);box-shadow:0 0 10px var(--c2)}
+.paused .tc{color:var(--c2)}
+.paused .what{color:var(--fg)}
+.ic svg{width:10px;height:10px;fill:currentColor;display:block;margin:auto}
+#pauseMini{color:var(--fg)}
+.paused #pauseMini{background:color-mix(in srgb,var(--ok) 70%,transparent);color:#fff}
 :focus-visible{outline:2px solid rgba(10,132,255,.7);outline-offset:1px}
 @media (prefers-reduced-motion:reduce){.on .dot{animation:none}}
 </style>
@@ -56,6 +63,7 @@ html,body{margin:0;background:transparent;overflow:hidden;font:12px/1.3 var(--fo
     <span class="dot" aria-hidden="true"></span>
     <span class="tc" id="tc">0:00:00</span>
     <span class="what" id="what">Загрузка…</span>
+    <button class="ic" id="pauseMini" title="Пауза" aria-label="Пауза"></button>
     <button class="ic" id="openMain" title="Открыть трекер" aria-label="Открыть трекер">⤢</button>
     <button class="ic" id="hideMini" title="Скрыть виджет" aria-label="Скрыть виджет">×</button>
   </div>

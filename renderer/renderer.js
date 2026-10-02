@@ -11,7 +11,7 @@ const DEFAULT_STAGES=[
 const SUGGEST=["Разбор материала","Моушн-дизайн","Субтитры","Экспорт и доставка","Созвоны с клиентом","Сценарий и раскадровка","Синхрон звука"];
 const MAX_ACTIVE=12;
 const LST="rt-tab";
-let tab="timer", projFilter=null;
+let tab="timer", projFilter=null, focusState={phase:"idle"}, pauseState=null, breaks=[];
 const VIEWS={timer:"Таймер",stats:"Статистика",projects:"Проекты",sessions:"Сессии",settings:"Настройки"};
 const FPS=25, LS="rt-sessions-v1", LSS="rt-stages-v1", LSP="rt-period", LSPRJ="rt-project";
 let sessions=[], stages=DEFAULT_STAGES.map(s=>({...s})), period="week", settings={auto:true,idleMinutes:5}, override=null, live={}, platform="darwin";
@@ -162,10 +162,15 @@ function renderClips(){
 const APPS_TEXT="Premiere, Resolve, After Effects или Audition";
 function renderStatus(){
   const run=running();
-  document.documentElement.style.setProperty("--glow",run?cvar(stageOf(run.cat)):"var(--c1)");
-  $("transport").className="card transport "+(run?"running":"idle");
+  document.documentElement.style.setProperty("--glow",pauseState?"var(--c2)":run?cvar(stageOf(run.cat)):"var(--c1)");
+  $("transport").className="card transport "+(pauseState?"paused":run?"running":"idle");
+  const pb=$("pauseBtn");
+  pb.innerHTML=pauseState?'<svg viewBox="0 0 24 24"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.4-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>':'<svg viewBox="0 0 24 24"><rect x="5.5" y="4" width="4.5" height="16" rx="1.4"/><rect x="14" y="4" width="4.5" height="16" rx="1.4"/></svg>';
+  pb.setAttribute("aria-label",pauseState?"Вернуться к работе":"Пауза");
+  pb.title=pauseState?"Вернуться к работе":"Пауза — трекер перестанет записывать время";
   let text;
-  if(run)text=`${stageOf(run.cat).name}${run.project?" · "+run.project:""}${run.app?" ("+run.app+")":""}${live.inGrace?" · отвлёкся":""}`;
+  if(pauseState)text=pauseState.endsAt?`Перерыв · вернёмся в ${fmtClock(pauseState.endsAt)}`:"Пауза · трекер не пишет время";
+  else if(run)text=`${stageOf(run.cat).name}${run.project?" · "+run.project:""}${run.app?" ("+run.app+")":""}${live.inGrace?" · отвлёкся":""}`;
   else if(settings.auto)text=live.idle?"Пауза: тебя нет за компом":"Ждёт "+APPS_TEXT.replace(" или "," / ");
   else text="Таймер стоит";
   $("statusText").textContent=text;
@@ -199,7 +204,8 @@ function renderSummary(){
   const total=Object.values(by).reduce((a,b)=>a+b,0);
   $("total").textContent=fmtHM(total);
   const days=new Set(list.map(s=>startOfDay(s.start))).size;
-  $("totalSub").textContent=list.length?`${list.length} ${plural(list.length,"сессия","сессии","сессий")} · ${days} ${plural(days,"рабочий день","рабочих дня","рабочих дней")}`:"нет сессий за период";
+  const brk=breaks.filter(b=>b.start>=from).reduce((a,b)=>a+Math.max(0,b.end-b.start),0);
+  $("totalSub").textContent=(list.length?`${list.length} ${plural(list.length,"сессия","сессии","сессий")} · ${days} ${plural(days,"рабочий день","рабочих дня","рабочих дней")}`:"нет сессий за период")+(brk?` · перерывы ${fmtHM(brk)}`:"");
   $("track").innerHTML=total?shown.filter(c=>by[c.id]>0).map(c=>`<span style="background:${cvar(c)};width:${by[c.id]/total*100}%" title="${esc(c.name)}"></span>`).join(""):"";
   $("legend").innerHTML=shown.filter(c=>!total||by[c.id]>0).map(c=>{
     const v=by[c.id]||0,pct=total?Math.round(v/total*100):0;
@@ -321,10 +327,66 @@ function renderSideNow(){
   $("sideNow").hidden=!show;
   if(show){$("sideNowL").textContent=stageOf(run.cat).name+(run.project?" · "+run.project:"");const t=Math.floor(dur(run)/1000);$("sideNowV").textContent=`${Math.floor(t/3600)}:${String(Math.floor(t%3600/60)).padStart(2,"0")}:${String(t%60).padStart(2,"0")}`}
 }
-function render(){if(!booted)return;renderStatus();renderClips();renderTabs();renderSummary();renderChart();renderProjects();renderLog();renderEditor();renderManualSelect();renderAllTime();renderProjList();tick()}
+function render(){if(!booted)return;renderFocus();renderStatus();renderClips();renderTabs();renderSummary();renderChart();renderProjects();renderLog();renderEditor();renderManualSelect();renderAllTime();renderProjList();tick()}
 
-function tick(){const run=running();$("tc").innerHTML=fmtTC(run?dur(run):0);renderSideNow()}
-setInterval(()=>{if(running())tick()},1000/FPS);
+function tick(){
+  const run=running();
+  if(pauseState)$("tc").innerHTML=fmtTC(pauseState.endsAt?Math.max(0,pauseState.endsAt-Date.now()):Date.now()-pauseState.start);
+  else $("tc").innerHTML=fmtTC(run?dur(run):0);
+  renderSideNow();renderRing();
+}
+/* ---------- фокус и перерывы ---------- */
+const RING=326.73;
+function mmss(ms){const t=Math.max(0,Math.round(ms/1000)),h=Math.floor(t/3600),m=Math.floor(t%3600/60),sec=t%60,p=n=>String(n).padStart(2,"0");return h?`${h}:${p(m)}:${p(sec)}`:`${p(m)}:${p(sec)}`}
+function ringModel(){
+  const now=Date.now(),f=focusState||{phase:"idle"},p=pauseState;
+  if(p){
+    if(p.endsAt){const total=(p.minutes||1)*6e4,left=Math.max(0,p.endsAt-now);return{pct:1-left/total,val:mmss(left),label:"Перерыв",color:"var(--c2)",done:false}}
+    return{pct:0,val:mmss(now-p.start),label:"Пауза",color:"var(--c2)",done:false};
+  }
+  if(f.phase==="work"){const total=f.minutes*6e4,left=Math.max(0,f.endsAt-now);const run=running();return{pct:1-left/total,val:mmss(left),label:"Фокус",color:run?cvar(stageOf(run.cat)):"var(--accent)",done:false}}
+  if(f.phase==="done")return{pct:1,val:"00:00",label:"Готово",color:"var(--ok)",done:true};
+  return{pct:0,val:mmss((settings.focusMinutes||50)*6e4),label:"Фокус",color:"var(--accent)",done:false};
+}
+function renderRing(){
+  const m=ringModel();
+  $("ringP").style.strokeDashoffset=String(RING*(1-Math.min(1,Math.max(0,m.pct))));
+  $("ring").style.setProperty("--ring",m.color);
+  $("ring").classList.toggle("done",m.done);
+  if($("ringV").textContent!==m.val)$("ringV").textContent=m.val;
+  $("ringL").textContent=m.label;
+}
+function renderFocus(){
+  const f=focusState||{phase:"idle"},p=pauseState,fm=settings.focusMinutes||50,bm=settings.breakMinutes||10;
+  const chips=(act,list,cur,cls="")=>list.map(n=>`<button type="button" class="pill ${n===cur?"tint":""} ${cls}" data-act="${act}" data-min="${n}">${n} мин</button>`).join("");
+  let title,sub,btns;
+  if(p){
+    title=p.endsAt?"Перерыв":"Пауза";
+    sub=p.endsAt?`Трекер стоит. В ${fmtClock(p.endsAt)} напомню и продолжу запись сама.`:"Трекер не пишет время, пока не вернёшься. Можно поставить таймер на перерыв.";
+    btns=`<button type="button" class="pill primary" data-act="resume" style="--c:var(--ok)">Вернуться к работе</button>`+
+      (p.endsAt?`<button type="button" class="pill" data-act="extend" data-min="5">+5 мин</button>`:`<span class="fgroup"><span>Таймер</span>${chips("break",[5,10,15],0)}</span>`);
+  }else if(f.phase==="work"){
+    title=`Фокус-блок · ${f.minutes} мин`;
+    sub=`Закончится в ${fmtClock(f.endsAt)}. Потом напомню отдохнуть.`;
+    btns=`<button type="button" class="pill tint" data-act="break" data-min="${bm}" style="--c:var(--c2)">Перерыв ${bm} мин сейчас</button><button type="button" class="pill" data-act="stopfocus">Остановить блок</button>`;
+  }else if(f.phase==="done"){
+    title="Блок закончен";
+    sub="Встань, разомнись, дай глазам отдохнуть от монитора.";
+    btns=`<span class="fgroup"><span>Перерыв</span>${[5,10,15].map(n=>`<button type="button" class="pill ${n===bm?"primary":"tint"}" data-act="break" data-min="${n}" style="--c:var(--c2)">${n} мин</button>`).join("")}</span><button type="button" class="pill" data-act="focus" data-min="${fm}">Ещё блок ${fm} мин</button>`;
+  }else{
+    title="Фокус и перерывы";
+    sub="Засеки блок работы — по окончании напомню сделать перерыв. Во время перерыва трекер не пишет время.";
+    btns=`<span class="fgroup"><span>Фокус</span>${chips("focus",[25,50,90],fm)}</span><span class="fgroup"><span>Перерыв</span>${chips("break",[5,10,15],0,"")}</span>`;
+  }
+  $("focusTitle").textContent=title;$("focusSub").textContent=sub;$("focusBtns").innerHTML=btns;
+  renderRing();
+}
+$("focusBtns").addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]");if(!b)return;const m=+b.dataset.min||null;
+  ({focus:()=>api.startFocus(m),break:()=>api.startPause(m),resume:()=>api.resume(),extend:()=>api.extendPause(m||5),stopfocus:()=>api.stopFocus()})[b.dataset.act]?.();
+});
+$("pauseBtn").addEventListener("click",()=>pauseState?api.resume():api.startPause(null));
+setInterval(()=>{if(booted&&(running()||pauseState||(focusState&&focusState.phase==="work")))tick()},1000/FPS);
 setInterval(()=>{if(booted&&running()){renderClips();renderSummary();renderChart();renderProjects();renderAllTime();document.querySelectorAll("[data-live]").forEach(el=>el.textContent=fmtHM(dur(running())))}},5000);
 
 /* ---------- events ---------- */
@@ -393,6 +455,7 @@ document.addEventListener("keydown",e=>{
   const n=parseInt(e.key,10),act=active();
   if(n>=1&&n<=9&&act[n-1]){e.preventDefault();toggle(act[n-1].id)}
   else if(e.code==="Space"&&settings.auto&&override){e.preventDefault();api.setOverride(null)}
+  else if(e.code==="KeyP"){e.preventDefault();pauseState?api.resume():api.startPause(null)}
   else if(e.code==="Space"&&running()){e.preventDefault();stop()}
 });
 $("mDate").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
@@ -412,6 +475,7 @@ let booted=false;
 function apply(st){
   sessions=st.sessions||[];stages=(st.stages&&st.stages.length)?st.stages:stages;
   settings=st.settings||settings;override=st.override||null;
+  focusState=st.focus||{phase:"idle"};pauseState=st.pause||null;breaks=st.breaks||[];
   if(document.activeElement!==$("project")&&$("project").value!==(st.project||""))$("project").value=st.project||"";
   $("idleSel").value=String(settings.idleMinutes||5);
   $("miniToggle").checked=settings.mini!==false;$("hotkeyToggle").checked=settings.hotkeys!==false;
