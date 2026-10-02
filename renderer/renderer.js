@@ -152,15 +152,18 @@ function renderClips(){
   $("clips").innerHTML=active().map((c,i)=>{
     const t=sessions.filter(s=>s.cat===c.id&&s.start>=today).reduce((a,s)=>a+dur(s),0);
     const on=run&&run.cat===c.id,ovr=settings.auto&&override===c.id;
+    const ico=on?'<svg viewBox="0 0 12 12"><rect x="2" y="1.5" width="3" height="9" rx="1"/><rect x="7" y="1.5" width="3" height="9" rx="1"/></svg>':'<svg viewBox="0 0 12 12"><path d="M3 1.8v8.4a.6.6 0 0 0 .9.5l7-4.2a.6.6 0 0 0 0-1L3.9 1.3a.6.6 0 0 0-.9.5z"/></svg>';
     return `<button class="clip" style="--c:${cvar(c)}" data-cat="${c.id}" aria-pressed="${!!on}">
-      ${i<9?`<kbd>${i+1}</kbd>`:""}${ovr?`<span class="ovr">вручную</span>`:""}<span class="name">${esc(c.name)}</span>
-      <span class="meta num">${on?"идёт · ":""}сегодня ${fmtHM(t)}</span></button>`;
+      <span class="ico" aria-hidden="true">${ico}</span>
+      <span class="txt"><span class="name">${esc(c.name)}${i<9?` <kbd>${i+1}</kbd>`:""}</span>
+      <span class="meta num">${ovr?"вручную · ":on?"идёт · ":""}сегодня ${fmtHM(t)}</span></span></button>`;
   }).join("");
 }
 const APPS_TEXT="Premiere, Resolve, After Effects или Audition";
 function renderStatus(){
   const run=running();
-  $("transport").className="transport "+(run?"running":"idle");
+  document.documentElement.style.setProperty("--glow",run?cvar(stageOf(run.cat)):"var(--c1)");
+  $("transport").className="card transport "+(run?"running":"idle");
   let text;
   if(run)text=`${stageOf(run.cat).name}${run.project?" · "+run.project:""}${run.app?" ("+run.app+")":""}${live.inGrace?" · отвлёкся":""}`;
   else if(settings.auto)text=live.idle?"Пауза: тебя нет за компом":"Ждёт "+APPS_TEXT.replace(" или "," / ");
@@ -218,7 +221,7 @@ function renderChart(){
   for(let h=0;h<=top;h+=step){g+=`<line class="grid" x1="${L}" x2="${W-R}" y1="${y(h*36e5)}" y2="${y(h*36e5)}"/><text x="${L-8}" y="${y(h*36e5)+4}" text-anchor="end">${h}ч</text>`}
   data.forEach((o,i)=>{
     let acc=0;const x=L+i*bw+bw*.2,w=bw*.6;
-    order.forEach(c=>{if(!o[c.id])return;const y0=y(acc),y1=y(acc+o[c.id]);g+=`<rect x="${x}" y="${y1}" width="${w}" height="${Math.max(1,y0-y1)}" fill="${cvar(c)}"><title>${esc(c.name)}: ${fmtHM(o[c.id])}</title></rect>`;acc+=o[c.id]});
+    order.forEach(c=>{if(!o[c.id])return;const y0=y(acc),y1=y(acc+o[c.id]);g+=`<rect x="${x}" y="${y1}" width="${w}" height="${Math.max(2,y0-y1-2)}" rx="5" fill="${cvar(c)}"><title>${esc(c.name)}: ${fmtHM(o[c.id])}</title></rect>`;acc+=o[c.id]});
     if(totals[i])g+=`<text x="${x+w/2}" y="${y(acc)-6}" text-anchor="middle">${(totals[i]/36e5).toFixed(1).replace(".",",")}</text>`;
     const d=new Date(days[i]);
     g+=`<text x="${x+w/2}" y="${H-10}" text-anchor="middle" class="${i===6?"today":""}">${DOW[d.getDay()]} ${d.getDate()}</text>`;
@@ -284,7 +287,7 @@ function renderProjects(){
   $("plist").innerHTML=ps.map(p=>{
     const shown=shownStages(p.by).filter(c=>p.by[c.id]>0);
     const share=grand?Math.round(p.total/grand*100):0;
-    return `<button type="button" class="pcard" data-proj="${esc(p.key)}" aria-pressed="${projFilter===p.key}">
+    return `<button type="button" class="card pcard" data-proj="${esc(p.key)}" aria-pressed="${projFilter===p.key}">
       <div class="phead"><span class="pname ${p.key==="__none"?"none":""}">${esc(p.name)}</span><span class="ptotal num">${fmtHM(p.total)}</span></div>
       <div class="track" aria-hidden="true">${shown.map(c=>`<span style="background:${cvar(c)};width:${p.by[c.id]/p.total*100}%"></span>`).join("")}</div>
       <div class="pstages">${shown.map(c=>`<span style="--c:${cvar(c)}"><i></i>${esc(c.name)} <b class="num">${fmtHM(p.by[c.id])}</b> <em class="num">${Math.round(p.by[c.id]/p.total*100)}%</em></span>`).join("")}</div>

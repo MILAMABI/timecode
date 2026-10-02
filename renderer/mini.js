@@ -36,13 +36,13 @@ function renderChips() {
   if (!state) return;
   const run = running(), auto = state.settings.auto, ovr = state.override;
   let html = "";
-  if (auto) html += `<button class="chip auto ${!ovr ? "cur" : ""}" data-act="auto" title="Этап определяется сам"><i></i>Авто<kbd>0</kbd></button>`;
+  if (auto) html += `<button class="chip auto ${!ovr ? "cur" : ""}" data-act="auto" title="Этап определяется сам"><i></i>Авто</button>`;
   active().forEach((s, i) => {
     const cur = run && run.cat === s.id;
     const isOvr = auto && ovr === s.id;
-    html += `<button class="chip ${cur ? "cur" : ""} ${isOvr ? "ovr" : ""}" style="--c:${cvar(s)}" data-cat="${esc(s.id)}" title="${auto ? "Писать время сюда" : cur ? "Остановить" : "Запустить"}"><i></i>${esc(s.name)}${i < 9 ? `<kbd>${i + 1}</kbd>` : ""}</button>`;
+    html += `<button class="chip ${cur ? "cur" : ""} ${isOvr ? "ovr" : ""}" style="--c:${cvar(s)}" data-cat="${esc(s.id)}" title="${auto ? "Писать время сюда" : cur ? "Остановить" : "Запустить"}${i < 9 ? " · клавиша " + (i + 1) : ""}"><i></i>${esc(s.name)}</button>`;
   });
-  if (!auto && run) html += `<button class="chip stop" data-act="stop"><i></i>Стоп<kbd>0</kbd></button>`;
+  if (!auto && run) html += `<button class="chip stop" data-act="stop"><i></i>Стоп</button>`;
   $("chips").innerHTML = html;
 }
 
@@ -61,11 +61,11 @@ $("hideMini").addEventListener("click", () => api.hideMini());
 // Подгоняем высоту окна под содержимое.
 let lastH = 0;
 new ResizeObserver(() => {
-  const h = Math.ceil($("w").getBoundingClientRect().height) + (document.body.classList.contains("vib") ? 0 : 12);
+  const h = Math.ceil($("w").getBoundingClientRect().height) + 16;
   if (h !== lastH) { lastH = h; api.miniResize(h); }
 }).observe($("w"));
 
-api.getState().then((r) => { state = r.state; live = r.live || {}; if (r.platform === "darwin") document.body.classList.add("vib"); render(); });
+api.getState().then((r) => { state = r.state; live = r.live || {}; render(); });
 api.onState((s) => { state = s; render(); });
 let lastKey = "";
 api.onLive((l) => {

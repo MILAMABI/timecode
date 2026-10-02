@@ -165,7 +165,7 @@ body.vib .group{background:var(--group-glass);backdrop-filter:blur(30px) saturat
 .chart text{fill:var(--secondary);font:11px var(--font);font-variant-numeric:tabular-nums}
 .chart .grid{stroke:var(--separator);stroke-width:1}
 .chart .today{fill:var(--fg);font-weight:600}
-.chart rect{rx:2}
+.chart rect{rx:5}
 
 /* ---------- Проекты ---------- */
 .plist{display:flex;flex-direction:column;gap:10px}
@@ -232,6 +232,91 @@ body.vib .entries{background:var(--group-glass);backdrop-filter:blur(30px) satur
 
 .toast{position:fixed;left:calc(50% + 106px);bottom:24px;transform:translateX(-50%);background:var(--group-glass);backdrop-filter:blur(30px) saturate(180%);color:var(--fg);padding:9px 16px;border-radius:12px;font-size:12.5px;box-shadow:0 0 0 .5px var(--separator),0 10px 30px rgba(0,0,0,.18);max-width:calc(100% - 260px);z-index:20}
 body:not(.vib) .toast{background:var(--group)}
+
+/* ================= Liquid glass ================= */
+:root{--lg-fill:linear-gradient(180deg,rgba(255,255,255,.62),rgba(255,255,255,.42));--lg-edge-a:rgba(255,255,255,.95);--lg-edge-b:rgba(0,0,0,.06);--lg-hi:rgba(255,255,255,.7);--lg-shadow:0 10px 40px rgba(30,30,60,.10),0 1px 2px rgba(0,0,0,.05);--glow:var(--c1);--pill-text-mix:black;--pill-text-amt:72%}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--lg-fill:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.035));--lg-edge-a:rgba(255,255,255,.42);--lg-edge-b:rgba(255,255,255,.05);--lg-hi:rgba(255,255,255,.18);--lg-shadow:0 18px 50px rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.3);--pill-text-mix:white;--pill-text-amt:62%}}
+:root[data-theme="dark"]{--lg-fill:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.035));--lg-edge-a:rgba(255,255,255,.42);--lg-edge-b:rgba(255,255,255,.05);--lg-hi:rgba(255,255,255,.18);--lg-shadow:0 18px 50px rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.3);--pill-text-mix:white;--pill-text-amt:62%}
+
+/* стекло: заливка + блик сверху + светящийся край (градиентная рамка через маску) */
+.card,.group,.entries,.seg,.toast,.empty,.banner,.side-now,.field,.ghost,.nav button[aria-current="page"]{
+  position:relative;background:var(--lg-fill);border:0;
+  backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);
+  box-shadow:inset 0 1px 0 var(--lg-hi),var(--lg-shadow)}
+.card::before,.group::before,.entries::before,.seg::before,.toast::before,.empty::before,.banner::before,.side-now::before,.field::before,.ghost::before,.pfilter::before,.clip::before,.nav button[aria-current="page"]::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(165deg,var(--lg-edge-a),var(--lg-edge-b) 38%,var(--lg-edge-b) 62%,var(--lg-edge-a));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+body:not(.vib) .card,body:not(.vib) .group,body:not(.vib) .entries,body.vib .card,body.vib .group,body.vib .entries{background:var(--lg-fill)}
+.ghost,.field,.side-now{box-shadow:inset 0 1px 0 var(--lg-hi)}
+.field{border-radius:999px;padding:8px 16px}
+input.field::placeholder{color:var(--tertiary)}
+
+/* скругления */
+.card{border-radius:30px}
+.group,.entries,.empty{border-radius:24px}
+.banner{border-radius:20px;padding:10px 12px 10px 16px}
+.side-now{border-radius:18px;padding:10px 14px}
+.toast{border-radius:999px;padding:10px 20px}
+.ghost,.btn,.pfilter{border-radius:999px;padding:6px 14px}
+.btn{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 88%,white),var(--accent));box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 4px 14px color-mix(in srgb,var(--accent) 35%,transparent)}
+.pfilter{position:relative;background:color-mix(in srgb,var(--accent) 22%,transparent);color:color-mix(in srgb,var(--accent) var(--pill-text-amt),var(--pill-text-mix));font-weight:600}
+.seg{border-radius:999px;padding:3px}
+.seg button{border-radius:999px;padding:5px 14px;position:relative}
+.seg button[aria-pressed="true"]{background:var(--lg-fill);box-shadow:inset 0 1px 0 var(--lg-hi),0 2px 8px rgba(0,0,0,.12)}
+.nav button{border-radius:999px;padding:7px 14px;position:relative}
+.nav button[aria-current="page"]{box-shadow:inset 0 1px 0 var(--lg-hi)}
+.transport{padding:26px 28px 24px}
+.pcard{border-radius:26px;padding:16px 20px}
+.stat{padding:24px 26px}
+.chart{padding:18px 18px 10px}
+.mform input,.mform select,.check select,.srow input,.sadd input{border-radius:999px;padding:7px 14px}
+.chip{border-radius:999px}
+.swatch{width:24px;height:24px;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 0 0 1px rgba(0,0,0,.08)}
+.track{height:10px;gap:3px;background:var(--fill)}
+.track span{box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+
+/* мягкое цветное свечение за стеклом: оттенок текущего этапа */
+.content::before{content:"";position:fixed;inset:0 0 0 212px;pointer-events:none;z-index:0;
+  background:radial-gradient(520px 380px at 72% 6%,color-mix(in srgb,var(--glow) 26%,transparent),transparent 70%),
+             radial-gradient(460px 360px at 12% 96%,color-mix(in srgb,var(--c4) 16%,transparent),transparent 70%);
+  transition:background .6s}
+.toolbar,.view{position:relative;z-index:1}
+body:not(.vib) .toolbar{background:transparent;backdrop-filter:blur(20px) saturate(160%)}
+@media (max-width:720px){.content::before{left:56px}}
+
+/* ---- этапы как стеклянные пилюли ---- */
+.clips{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+.clip{--tint:color-mix(in srgb,var(--c) 22%,transparent);--tint-2:color-mix(in srgb,var(--c) 8%,transparent);
+  display:inline-flex;flex-direction:row;align-items:center;gap:11px;padding:7px 18px 7px 7px;border-radius:999px;
+  background:linear-gradient(180deg,var(--tint),var(--tint-2));color:color-mix(in srgb,var(--c) var(--pill-text-amt),var(--pill-text-mix));
+  backdrop-filter:blur(20px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18);transition:transform .15s,box-shadow .2s,background .2s}
+.clip::before{background:linear-gradient(165deg,color-mix(in srgb,var(--c) 85%,white),color-mix(in srgb,var(--c) 18%,transparent) 45%,color-mix(in srgb,var(--c) 18%,transparent) 60%,color-mix(in srgb,var(--c) 70%,white));opacity:.55}
+.clip:hover{background:linear-gradient(180deg,color-mix(in srgb,var(--c) 30%,transparent),color-mix(in srgb,var(--c) 12%,transparent))}
+.clip:active{transform:scale(.97)}
+.clip .ico{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--c) 70%,white),var(--c));color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 2px 6px color-mix(in srgb,var(--c) 40%,transparent)}
+.clip .ico svg{width:12px;height:12px;fill:currentColor}
+.clip .txt{display:flex;flex-direction:column;align-items:flex-start;gap:0;min-width:0}
+.clip .name{font-weight:600;font-size:13.5px;color:inherit}
+.clip .name::before{content:none}
+.clip .meta{padding:0;font-size:11px;color:inherit;opacity:.7}
+.clip kbd{position:static;font:10.5px var(--font);color:inherit;opacity:.5;margin-left:2px}
+.clip .ovr{position:static;font-size:10px;color:inherit;text-transform:uppercase;letter-spacing:.06em;opacity:.85}
+.clip[aria-pressed="true"]{background:linear-gradient(180deg,color-mix(in srgb,var(--c) 40%,transparent),color-mix(in srgb,var(--c) 18%,transparent));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 0 0 0 transparent,0 8px 30px color-mix(in srgb,var(--c) 40%,transparent)}
+.clip[aria-pressed="true"]::before{opacity:1}
+.hint{margin-top:-4px}
+
+/* статистика: легенда пилюлями */
+.legend{display:flex;flex-wrap:wrap;gap:8px}
+.leg{display:inline-flex;align-items:center;gap:8px;padding:6px 14px 6px 10px;border:0;border-radius:999px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--c) 20%,transparent),color-mix(in srgb,var(--c) 7%,transparent));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.15),inset 0 0 0 1px color-mix(in srgb,var(--c) 30%,transparent)}
+.leg::before{width:9px;height:9px}
+.leg .lname{color:color-mix(in srgb,var(--c) var(--pill-text-amt),var(--pill-text-mix));font-weight:500}
+.leg .lval{font-weight:600}
+.leg .lpct{grid-column:auto;font-size:11.5px}
 
 @media (max-width:720px){
   .app{grid-template-columns:56px minmax(0,1fr)}
