@@ -195,7 +195,11 @@ function renderStatus(){
   $("hint").textContent=settings.auto
     ?"Этап определяется по программе. Занялся другим этапом в той же программе — нажми его."
     :"Нажми этап, чтобы запустить. Тот же этап — стоп.";
-  $("accessBanner").hidden=!(settings.auto&&live.needsAccess);
+  const acc=settings.auto&&!pauseState&&live.needsAccess&&!accessHidden;
+  $("accessBanner").hidden=!acc;
+  if(acc)$("accessText").textContent=live.needsAccess==="automation"
+    ?"Время пишется, но без названия проекта: разреши Timecode управлять «System Events» в Настройках → Конфиденциальность → Автоматизация."
+    :"Время пишется, но без названия проекта: включи Timecode в Настройках → Конфиденциальность → Универсальный доступ. Если он уже включён — выключи и включи заново.";
   const ob=settings.auto&&override;
   $("overrideBanner").hidden=!ob;
   if(ob)$("overrideText").textContent=`Этап выбран вручную: «${stageOf(override).name}». Сбросится сам после 30 минут без работы.`;
@@ -499,7 +503,9 @@ function apply(st){
   render();
 }
 $("autoToggle").addEventListener("change",e=>{settings.auto=e.target.checked;renderStatus();api.setSettings({auto:e.target.checked})});
-$("accessBtn").addEventListener("click",()=>api.requestAccess());
+let accessHidden=false;
+$("accessBtn").addEventListener("click",()=>api.requestAccess(live.needsAccess));
+$("accessHide").addEventListener("click",()=>{accessHidden=true;renderStatus()});
 $("overrideReset").addEventListener("click",()=>api.setOverride(null));
 $("loginToggle").addEventListener("change",e=>api.setSettings({openAtLogin:e.target.checked}));
 $("idleSel").addEventListener("change",e=>api.setSettings({idleMinutes:+e.target.value}));

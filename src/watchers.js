@@ -63,10 +63,20 @@ class FrontWindow {
 
   readMac() {
     return new Promise((resolve) => {
-      execFile("osascript", ["-e", MAC_SCRIPT], { timeout: 4000 }, (err, stdout) => {
-        if (err) return resolve({ app: "", title: "", ok: false });
-        const [app, ...rest] = String(stdout).trim().split("||");
-        resolve({ app: app || "", title: rest.join("||"), ok: true });
+      execFile("osascript", ["-e", MAC_SCRIPT], { timeout: 4000 }, (err, stdout, stderr) => {
+        if (!err) {
+          const [app, ...rest] = String(stdout).trim().split("||");
+          return resolve({ app: app || "", title: rest.join("||"), ok: true, why: null });
+        }
+        // Почему не вышло: -1743 — нет разрешения «Автоматизация», -25211/assistive — нет «Универсального доступа».
+        const msg = String(stderr || err.message || "");
+        const why = /-1743|not authori[sz]ed to send apple events/i.test(msg) ? "automation"
+          : /-25211|-1719|assistive|accessibility/i.test(msg) ? "accessibility" : "other";
+        // Имя программы узнаём и без разрешений — трекинг продолжит работать, просто без названия проекта.
+        execFile("lsappinfo", ["info", "-only", "name", "front"], { timeout: 3000 }, (e2, out2) => {
+          const m = /"(?:LSDisplayName|name)"\s*=\s*"([^"]+)"/i.exec(String(out2 || ""));
+          resolve({ app: m ? m[1] : "", title: "", ok: false, why });
+        });
       });
     });
   }

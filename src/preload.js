@@ -22,7 +22,7 @@ contextBridge.exposeInMainWorld("api", {
   startPause: (m) => ipcRenderer.invoke("pause:start", m),
   resume: () => ipcRenderer.invoke("pause:resume"),
   extendPause: (m) => ipcRenderer.invoke("pause:extend", m),
-  requestAccess: () => ipcRenderer.invoke("access:request"),
+  requestAccess: (kind) => ipcRenderer.invoke("access:request", kind),
   exportCSV: () => ipcRenderer.invoke("export:csv"),
   revealData: () => ipcRenderer.invoke("data:reveal"),
   miniResize: (h) => ipcRenderer.invoke("mini:resize", h),

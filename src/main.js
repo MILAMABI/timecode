@@ -114,14 +114,15 @@ function createMini() {
     skipTaskbar: true,
     hasShadow: false,
     show: false,
-    focusable: false, // клик по виджету не уводит фокус из Premiere
+    focusable: false, // клик по виджету не уводит фокус из рабочей программы
     acceptFirstMouse: true,
-    ...(isMac ? { type: "panel" } : {}),
+    hiddenInMissionControl: true,
     title: "Таймкод — виджет",
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
-  mini.setAlwaysOnTop(true, isMac ? "floating" : "screen-saver");
-  if (isMac) mini.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // уровень «screen-saver» — выше всех окон, в том числе программ на весь экран
+  mini.setAlwaysOnTop(true, "screen-saver");
+  if (isMac) mini.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   mini.loadFile(path.join(__dirname, "..", "renderer", "mini.html"));
   mini.once("ready-to-show", () => mini.showInactive());
   let moveTimer = null;
@@ -135,6 +136,15 @@ function createMini() {
   });
   mini.on("closed", () => { mini = null; });
   return mini;
+}
+
+// Сторож: если виджет включён, а окно пропало или спряталось (смена рабочего стола,
+// выход из полноэкранного режима, сон) — возвращаем его на место, не забирая фокус.
+function keepMiniAlive() {
+  if (!store || !store.state.settings.mini) return;
+  if (!mini || mini.isDestroyed()) { createMini(); return; }
+  if (!mini.isVisible()) mini.showInactive();
+  if (!mini.isAlwaysOnTop()) mini.setAlwaysOnTop(true, "screen-saver");
 }
 
 function setMini(on) {
@@ -451,7 +461,7 @@ async function tick() {
     const st = store.state;
     if (st.pause) {
       if (engine.cur) engine.close();
-      live = { ...live, tracking: false, sessionId: null, last: null, inGrace: false, paused: true };
+      live = { ...live, tracking: false, sessionId: null, last: null, inGrace: false, paused: true, needsAccess: false };
       return;
     }
     if (!st.settings.auto) {
@@ -498,7 +508,8 @@ async function tick() {
       project: cur ? cur.project : "",
       last: cur ? cur.last : null,
       sessionId: cur ? cur.sessionId : null,
-      needsAccess: isMac && (!fw.ok || !systemPreferences.isTrustedAccessibilityClient(false)),
+      // показываем подсказку только если чтение окна реально не работает
+      needsAccess: isMac && fw.ok === false ? (fw.why === "automation" ? "automation" : "accessibility") : false,
       resolve: resolveHelper ? resolveHelper.status : "idle",
       idle: idleMs >= idleLimit,
       frontApp: fw.app,
@@ -545,8 +556,12 @@ function setupIpc() {
   ipcMain.handle("pause:start", (_e, m) => startPause(m ? Math.max(1, Math.min(180, Number(m))) : null));
   ipcMain.handle("pause:resume", () => resumeWork());
   ipcMain.handle("pause:extend", (_e, m) => extendPause(Math.max(1, Math.min(60, Number(m) || 5))));
-  ipcMain.handle("access:request", () => {
+  ipcMain.handle("access:request", (_e, kind) => {
     if (!isMac) return;
+    if (kind === "automation") {
+      shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Automation");
+      return;
+    }
     systemPreferences.isTrustedAccessibilityClient(true);
     shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
   });
@@ -599,6 +614,16 @@ app.whenReady().then(() => {
   createWindow(!hidden);
   hotkeyResult = registerHotkeys();
   if (store.state.settings.mini) createMini();
+  setInterval(keepMiniAlive, 3000);
+  powerMonitor.on("resume", () => setTimeout(keepMiniAlive, 1500));
+  powerMonitor.on("unlock-screen", () => setTimeout(keepMiniAlive, 1500));
+  screen.on("display-removed", () => {
+    // монитор отключили — переносим виджет на основной экран
+    if (mini && !mini.isDestroyed()) {
+      const a = screen.getPrimaryDisplay().workArea;
+      mini.setPosition(a.x + a.width - MINI_W - 24, a.y + 24);
+    }
+  });
   if (hidden && isMac && app.dock) app.dock.hide();
   setInterval(tick, POLL_MS);
   setInterval(updateTray, 60_000);

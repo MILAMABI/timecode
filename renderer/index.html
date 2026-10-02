@@ -393,6 +393,7 @@ body:not(.vib) .toolbar{background:transparent;backdrop-filter:blur(20px) satura
 .pill:disabled{opacity:.45;filter:grayscale(.4)}
 .prow-apps{font-size:11.5px;color:var(--secondary)}
 .aboutico{width:40px;height:40px;border-radius:10px}
+.bbtns{display:inline-flex;gap:6px;flex-wrap:wrap}
 .prow .pdot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none;margin-right:2px}
 
 @media (max-width:720px){
@@ -442,7 +443,7 @@ body:not(.vib) .toolbar{background:transparent;backdrop-filter:blur(20px) satura
           <div class="tc" id="tc" aria-live="off">00:00:00<span class="ff">:00</span></div>
           <button type="button" class="pausebtn" id="pauseBtn" aria-label="Пауза" title="Пауза — трекер перестанет записывать время"></button>
         </div>
-        <div class="banner" id="accessBanner" hidden><span>Чтобы видеть, какая программа открыта, macOS нужно разрешение «Универсальный доступ».</span><button type="button" class="ghost" id="accessBtn">Открыть настройки</button></div>
+        <div class="banner" id="accessBanner" hidden><span id="accessText"></span><span class="bbtns"><button type="button" class="ghost" id="accessBtn">Открыть настройки</button><button type="button" class="ghost" id="accessHide">Скрыть</button></span></div>
         <div class="banner" id="overrideBanner" hidden><span id="overrideText"></span><button type="button" class="ghost" id="overrideReset">Вернуть авто</button></div>
         <div class="proj">
           <label for="project">Проект</label>
