@@ -1,5 +1,5 @@
 /*!
- * Рабочий таймкод (Timecode)
+ * Playhead
  * © 2026 MILAMABI. Все права защищены. Проприетарное ПО — см. LICENSE.
  * Копирование, изменение и распространение без разрешения автора запрещены.
  */
@@ -40,6 +40,26 @@ let hotkeyResult = { ok: true, failed: [] };
 let lastAutoKey = null;
 let live = { tracking: false, app: "", stage: null, project: "", last: null, sessionId: null, needsAccess: false, resolve: "idle", idle: false, frontApp: "" };
 
+/* ---------------- переезд со старого названия ---------------- */
+
+// До версии 2.0 приложение называлось Timecode и хранило данные в папке «Timecode».
+// Копируем их в папку Playhead один раз, если там ещё пусто.
+function migrateFromTimecode() {
+  try {
+    const dir = app.getPath("userData");
+    const file = path.join(dir, "timecode-data.json");
+    if (fs.existsSync(file)) return;
+    const old = path.join(path.dirname(dir), "Timecode", "timecode-data.json");
+    if (!fs.existsSync(old)) return;
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(old, file);
+    if (fs.existsSync(old + ".bak")) fs.copyFileSync(old + ".bak", file + ".bak");
+    console.log("Данные перенесены из Timecode");
+  } catch (e) {
+    console.error("Не удалось перенести данные из Timecode:", e);
+  }
+}
+
 /* ---------------- окно ---------------- */
 
 function createWindow(show = true) {
@@ -49,7 +69,7 @@ function createWindow(show = true) {
     minWidth: 560,
     minHeight: 520,
     show,
-    title: "Рабочий таймкод",
+    title: "Playhead",
     ...(isMac
       ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 18, y: 18 }, vibrancy: "sidebar", visualEffectState: "followWindow", backgroundColor: "#00000000" }
       : isWin11
@@ -139,7 +159,7 @@ function createMini() {
     focusable: false, // клик по виджету не уводит фокус из рабочей программы
     acceptFirstMouse: true,
     hiddenInMissionControl: true,
-    title: "Таймкод — виджет",
+    title: "Playhead — виджет",
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   // уровень «screen-saver» — выше всех окон, в том числе программ на весь экран
@@ -245,7 +265,7 @@ function createTray() {
     img = nativeImage.createFromPath(asset("tray.png"));
   }
   tray = new Tray(img);
-  tray.setToolTip("Рабочий таймкод");
+  tray.setToolTip("Playhead");
   if (!isMac) tray.on("click", showWindow);
   updateTray();
 }
@@ -282,7 +302,7 @@ function updateTrayTitle() {
   if (!tray) return;
   const cur = currentLine();
   if (isMac) tray.setTitle(cur ? ` ${cur.paused ? "☕ " : ""}${cur.short} · ${cur.stage}` : "", { fontType: "monospacedDigit" });
-  tray.setToolTip(cur ? `Рабочий таймкод — ${cur.text}` : "Рабочий таймкод — пауза");
+  tray.setToolTip(cur ? `Playhead — ${cur.text}` : "Playhead — пауза");
 }
 
 function updateTray() {
@@ -535,7 +555,7 @@ async function tick() {
         if (!resolveHelper) resolveHelper = new ResolveHelper(resolveHelperPath(app.isPackaged, process.resourcesPath, __dirname));
         resolveInfo = resolveHelper.poke();
       }
-      if (/timecode|electron/i.test(fw.app)) {
+      if (/playhead|timecode|electron/i.test(fw.app)) {
         // кликнул в наше окно — продолжаем то, что было в монтажке
         key = lastAutoKey ? { ...lastAutoKey } : null;
       } else {
@@ -654,7 +674,7 @@ function setupIpc() {
     const d = new Date();
     const { canceled, filePath } = await dialog.showSaveDialog(win, {
       title: "Экспорт сессий",
-      defaultPath: path.join(app.getPath("documents"), `timecode-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.csv`),
+      defaultPath: path.join(app.getPath("documents"), `playhead-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.csv`),
       filters: [{ name: "CSV", extensions: ["csv"] }],
     });
     if (canceled || !filePath) return { ok: false };
@@ -684,11 +704,12 @@ powerMonitor.on("lock-screen", () => { if (engine) engine.close(); });
 app.whenReady().then(() => {
   app.setAppUserModelId && app.setAppUserModelId("app.timecode.tracker");
   app.setAboutPanelOptions({
-    applicationName: "Рабочий таймкод",
+    applicationName: "Playhead",
     applicationVersion: app.getVersion(),
     copyright: "© 2026 MILAMABI. Все права защищены.",
     credits: "Автор и правообладатель: MILAMABI\ngithub.com/MILAMABI",
   });
+  migrateFromTimecode();
   store = new Store(app.getPath("userData"), (state) => send("state", state));
   store.repair();
   setupEngine();

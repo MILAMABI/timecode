@@ -43,7 +43,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
       - uses: actions/upload-artifact@v4
         with:
-          name: Timecode-${{ matrix.name }}
+          name: Playhead-${{ matrix.name }}
           path: ${{ matrix.files }}
 
   release:

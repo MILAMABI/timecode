@@ -1,8 +1,8 @@
 {
-  "name": "timecode-tracker",
-  "productName": "Timecode",
-  "version": "1.8.0",
-  "description": "Рабочий таймкод — трекер времени для креативщиков: видео, фото, дизайн, моушн, звук. Сам пишет время в рабочих программах и раскладывает по этапам и проектам.",
+  "name": "playhead",
+  "productName": "Playhead",
+  "version": "2.0.0",
+  "description": "Playhead — трекер времени для креативщиков: видео, фото, дизайн, моушн, звук. Сам пишет время в рабочих программах и раскладывает по этапам и проектам.",
   "main": "src/main.js",
   "author": "MILAMABI",
   "license": "SEE LICENSE IN LICENSE",
@@ -22,7 +22,7 @@
   },
   "build": {
     "appId": "app.timecode.tracker",
-    "productName": "Timecode",
+    "productName": "Playhead",
     "files": [
       "src/**/*",
       "renderer/**/*",
@@ -55,22 +55,23 @@
       "identity": null,
       "extendInfo": {
         "LSUIElement": false,
-        "NSAppleEventsUsageDescription": "Таймкоду нужно видеть, какая программа открыта (Premiere, Lightroom, Figma и другие), чтобы считать рабочее время."
+        "NSAppleEventsUsageDescription": "Playhead нужно видеть, какая программа открыта (Premiere, Lightroom, Figma и другие), чтобы считать рабочее время."
       }
     },
     "dmg": {
-      "title": "Timecode",
-      "artifactName": "Timecode-${version}-${arch}.dmg"
+      "title": "Playhead",
+      "artifactName": "Playhead-${version}-${arch}.dmg"
     },
     "win": {
       "icon": "build/icon.png",
-      "target": "nsis"
+      "target": "nsis",
+      "artifactName": "Playhead-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "Рабочий таймкод",
+      "shortcutName": "Playhead",
       "license": "LICENSE"
     },
     "compression": "maximum",

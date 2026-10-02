@@ -1,5 +1,5 @@
 /*!
- * Рабочий таймкод (Timecode)
+ * Playhead
  * © 2026 MILAMABI. Все права защищены. Проприетарное ПО — см. LICENSE.
  * Копирование, изменение и распространение без разрешения автора запрещены.
  */
@@ -200,8 +200,8 @@ function renderStatus(){
   const acc=settings.auto&&!pauseState&&live.needsAccess&&!accessHidden;
   $("accessBanner").hidden=!acc;
   if(acc)$("accessText").textContent=live.needsAccess==="automation"
-    ?"Время пишется, но без названия проекта: разреши Timecode управлять «System Events» в Настройках → Конфиденциальность → Автоматизация."
-    :"Время пишется, но без названия проекта: включи Timecode в Настройках → Конфиденциальность → Универсальный доступ. Если он уже включён — выключи и включи заново.";
+    ?"Время пишется, но без названия проекта: разреши Playhead управлять «System Events» в Настройках → Конфиденциальность → Автоматизация."
+    :"Время пишется, но без названия проекта: включи Playhead в Настройках → Конфиденциальность → Универсальный доступ. Если он уже включён — выключи и включи заново.";
   const ob=settings.auto&&override;
   $("overrideBanner").hidden=!ob;
   if(ob)$("overrideText").textContent=`Этап выбран вручную: «${stageOf(override).name}». Сбросится сам после 30 минут без работы.`;

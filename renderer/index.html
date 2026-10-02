@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
-<title>Рабочий таймкод</title>
+<title>Playhead</title>
 <style>
 /* Layout: окно в духе macOS — полупрозрачная боковая панель с разделами и одна задача в каждом разделе.
    Цвета — системная палитра Apple; этапы обозначаются только точками, а не заливками. */
@@ -540,7 +540,7 @@ body:not(.vib) .toolbar{background:transparent;backdrop-filter:blur(20px) satura
 
       <h2 class="section-title">Виджет и клавиши</h2>
       <div class="group">
-        <div class="row"><span class="rl">Мини-виджет поверх всех окон<small>Таймкод и кнопки этапов, не забирает фокус у рабочей программы</small></span><label class="switch" for="miniToggle"><input type="checkbox" id="miniToggle" role="switch"><span class="knob" aria-hidden="true"></span></label></div>
+        <div class="row"><span class="rl">Мини-виджет поверх всех окон<small>Таймер и кнопки этапов, не забирает фокус у рабочей программы</small></span><label class="switch" for="miniToggle"><input type="checkbox" id="miniToggle" role="switch"><span class="knob" aria-hidden="true"></span></label></div>
         <div class="row"><span class="rl">Горячие клавиши в любой программе<small><span class="num" id="hotkeyLabel"></span> — этап по номеру, 0 — вернуть авто или остановить, P — пауза</small></span><label class="switch" for="hotkeyToggle"><input type="checkbox" id="hotkeyToggle" role="switch"><span class="knob" aria-hidden="true"></span></label></div>
         <div class="row" id="hotkeyWarnRow" hidden><span class="rl"><small id="hotkeyWarn" hidden></small></span></div>
       </div>
@@ -560,7 +560,7 @@ body:not(.vib) .toolbar{background:transparent;backdrop-filter:blur(20px) satura
 
       <h2 class="section-title">О программе</h2>
       <div class="group about">
-        <div class="row"><span class="rl"><b>Рабочий таймкод</b><small id="aboutVer">Версия</small></span><img class="aboutico" src="icon.png" alt=""></div>
+        <div class="row"><span class="rl"><b>Playhead</b><small id="aboutVer">Версия</small></span><img class="aboutico" src="icon.png" alt=""></div>
         <div class="row"><span class="rl">Автор и правообладатель<small>© 2026 MILAMABI. Все права защищены.</small></span><span class="num" style="color:var(--secondary)">github.com/MILAMABI</span></div>
         <div class="row"><span class="rl"><small>Проприетарное ПО. Копирование, изменение, декомпиляция и распространение без письменного разрешения автора запрещены.</small></span></div>
       </div>

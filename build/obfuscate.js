@@ -1,5 +1,5 @@
 /*!
- * Рабочий таймкод (Timecode)
+ * Playhead
  * © 2026 MILAMABI. Все права защищены. Проприетарное ПО — см. LICENSE.
  */
 // Запутывает JS перед упаковкой. Запускается только в сборке (CI), исходники в репозитории остаются читаемыми.
@@ -10,7 +10,7 @@ const JavaScriptObfuscator = require("javascript-obfuscator");
 const root = path.join(__dirname, "..");
 const pkg = require(path.join(root, "package.json"));
 const BANNER =
-  `/*! Рабочий таймкод (Timecode) v${pkg.version} · © 2026 MILAMABI. Все права защищены.\n` +
+  `/*! Playhead v${pkg.version} · © 2026 MILAMABI. Все права защищены.\n` +
   ` * Проприетарное ПО. Копирование, изменение, декомпиляция и распространение без разрешения автора запрещены. */\n`;
 
 const common = {
